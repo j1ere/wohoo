@@ -131,11 +131,11 @@ AUTH_USER_MODEL = 'mainapp.CustomUser'
 ASGI_APPLICATION = 'wohoo.asgi.application'
 
 #Redis for channel layers
-# CHANNEL_LAYERS = {
-#     'default': {
-#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
-#         'CONFIG': {
-#             "hosts": [("127.0.0.1", 6379)],#connect to redis container running on your local machine
-#         },
-#     },
-# }
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [("127.0.0.1", 6379)],#connect to redis container running on your local machine
+        },
+    },
+}
