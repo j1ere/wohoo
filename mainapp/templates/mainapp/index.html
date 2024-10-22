@@ -3,101 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebSocket Chat</title>
+    <title>Chat Room</title>
+    <link rel="stylesheet" href="#"> <!-- Assuming a static CSS file -->
     <style>
         body {
             font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            padding: 20px;
         }
 
-        div{
+        h2 {
+            color: #333;
+        }
+
+        #chat-log {
             width: 100%;
-            height: 300px;
-            border: 1px solid #ccc;
+            max-width: 800px;
+            height: 400px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 10px;
             overflow-y: scroll;
-            margin-bottom: 10px;
+            resize: none;
+        }
+
+        #chat-message-input {
+            width: 100%;
+            max-width: 800px;
             padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
         }
 
-        input{
-            width: 80%;
-            padding: 10px;
-            margin-right: 5px;
+        #chat-message-submit {
+            display: none; /* This button is hidden as we're using Enter key for sending messages */
         }
 
-        button{
-            padding: 10px 15px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background-color: #45a049;
-        }
     </style>
 </head>
 <body>
-    <h1>WebSocket Chat</h1>
-    
-    <!-- Message input field -->
-    <input id="messageInput" type="text" placeholder="Type a message" autocomplete="off" />
-    <button onclick="sendMessage()">Send</button>
-    <button onclick="closeConnection()">Close Connection</button>
+    <h2>Chat Room: {{ room_name }}</h2>  <!-- room_name is passed in from Django context -->
 
-    <!-- Message display area -->
-    <div id="messages"></div>
+    <!-- Chat log (readonly) -->
+    <textarea id="chat-log" cols="100" rows="20" readonly></textarea><br>
+
+    <!-- Input for chat message -->
+    <input id="chat-message-input" type="text" size="100" autocomplete="off" placeholder="Type a message...">
+    
+    <!-- Placeholder for future send button (optional) -->
+    <button id="chat-message-submit">Send</button>
 
     <script>
-        // Establish WebSocket connection to the server
+        const roomName = "{{ room_name }}";  // room_name is injected by Django
         const chatSocket = new WebSocket(
-            'ws://' + window.location.host + '/ws/chat/'
+            'ws://' + window.location.host + '/ws/chat/' + roomName + '/'
         );
 
-        // Called when the WebSocket is opened successfully
-        chatSocket.onopen = function(e) {
-            console.log('WebSocket connection opened');
-        };
-
-        // Called when a message is received from the server
         chatSocket.onmessage = function(e) {
             const data = JSON.parse(e.data);
-            const message = data.message;
-            
-            // Display the message in the 'messages' div
-            const messagesDiv = document.getElementById('messages');
-            const messageElem = document.createElement('p');
-            messageElem.textContent = message;
-            messagesDiv.appendChild(messageElem);
+            document.querySelector('#chat-log').value += (data.message + '\n');
         };
 
-        // Called when the WebSocket is closed
         chatSocket.onclose = function(e) {
-            console.error('WebSocket closed unexpectedly');
+            console.error('Chat socket closed unexpectedly');
         };
 
-        // Function to close the WebSocket connection
-        function closeConnection() {
-            chatSocket.close();
-            console.log('WebSocket connection closed');
-        }
-
-        // Called when an error occurs in the WebSocket
-        chatSocket.onerror = function(e) {
-            console.error('WebSocket error:', e);
+        document.querySelector('#chat-message-input').focus();
+        document.querySelector('#chat-message-input').onkeyup = function(e) {
+            if (e.keyCode === 13) {  // Enter key
+                const messageInputDom = document.querySelector('#chat-message-input');
+                const message = messageInputDom.value;
+                chatSocket.send(JSON.stringify({
+                    'message': message
+                }));
+                messageInputDom.value = '';
+            }
         };
-
-        // Function to send a message to the server
-        function sendMessage() {
-            const inputElem = document.getElementById('messageInput');
-            const message = inputElem.value;
-            
-            chatSocket.send(JSON.stringify({
-                'message': message
-            }));
-            
-            inputElem.value = ''; // Clear the input after sending
-        }
     </script>
 </body>
 </html>
