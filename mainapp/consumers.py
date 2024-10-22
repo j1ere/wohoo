@@ -217,3 +217,82 @@ json.dumps(): Converts the Python dictionary ({'message': message}) into a JSON 
 This sends the message back to the WebSocket client.
 
 """
+
+"""
+Yes, these two methods (receive and chat_message) work together to handle message 
+transmission in a WebSocket-based chat system. Let me explain their interaction step by step:
+
+1. receive(self, text_data)
+This method handles incoming messages from the WebSocket client (usually the browser).
+ Here's what happens in detail:
+
+Step 1: Receive WebSocket Message
+
+The receive method is triggered when the WebSocket client sends data to the server.
+text_data is the raw message received from the client in JSON format. Typically,
+ this might be a user sending a chat message.
+Step 2: Convert JSON Data to Python Dictionary
+
+text_data_json = json.loads(text_data) converts the incoming JSON string (text data) 
+into a Python dictionary.
+For example, if the client sent {"message": "Hello, everyone!"}, it would be converted 
+into a Python dictionary: {"message": "Hello, everyone!"}.
+Step 3: Extract the Message
+
+message = text_data_json['message'] extracts the value associated with the 'message' key 
+from the dictionary, so now message would be "Hello, everyone!".
+Step 4: Broadcast Message to Group
+
+await self.channel_layer.group_send(self.room_group_name, {'type': 'chat_message', 'message': message}):
+This sends the message to all WebSocket clients (users) that are in the same room.
+self.room_group_name specifies the group name (e.g., 'chat_room1').
+group_send() is a method provided by the channel_layer, which broadcasts the message to everyone
+ in the group.
+{'type': 'chat_message', 'message': message}: The type: 'chat_message' specifies that the
+ message should trigger the chat_message method (explained below). The message itself is included
+   as part of this dictionary.
+
+2. chat_message(self, event)
+This method is triggered when a message is sent to the room group
+ (via group_send from the receive method).
+ Here's what happens in detail:
+
+Step 1: Receive Event from Group
+
+The chat_message method is called when the group (chat room) receives a message.
+The event parameter contains the message that was sent by the group_send() call.
+ So event is a dictionary, and its contents are the message that was sent, in this case,
+   {'type': 'chat_message', 'message': 'Hello, everyone!'}.
+
+Step 2: Extract the Message
+
+message = event['message'] extracts the actual message from the event dictionary.
+ So message will now be "Hello, everyone!".
+
+Step 3: Send Message to WebSocket Client
+
+await self.send(text_data=json.dumps({'message': message})):
+self.send() sends the message back to the WebSocket client (the browser).
+json.dumps() converts the Python dictionary {'message': message} 
+back into a JSON string to be sent via WebSocket.
+This sends the message (now in JSON format) to all WebSocket clients connected to the room.
+Interaction Between receive and chat_message
+When a User Sends a Message:
+
+The WebSocket client sends a message (e.g., {"message": "Hello"}) to the server.
+The receive method is triggered. It extracts the message and calls group_send() 
+to broadcast it to the group.
+When the Group Receives the Message:
+
+The chat_message method is triggered for all clients in the group.
+This method takes the message and sends it back to each WebSocket client in the room using self.send().
+Result:
+
+The message that one user sends gets broadcast to all other users in the chat room in real-time.
+Flow:
+receive() method: Handles incoming messages from a specific user, 
+processes the message, and sends it to the chat group.
+chat_message() method: Broadcasts the message to all users in the group,
+ sending it back to their WebSocket connections.
+This interaction allows a real-time chat room where messages are shared among all connected users.
+"""
