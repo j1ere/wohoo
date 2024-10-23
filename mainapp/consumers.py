@@ -175,10 +175,33 @@ class DMConsumer(AsyncWebsocketConsumer):
         #send the message to the room group
         await self.channel_layer.group_send(self.room_group_name, {'type':'chat_message', 'message':message, 'sender': self.user.username})
 
+        #send notification to the recipient
+        await self.channel_layer.group_send(f"notifications_{self.receiver_username}", {'type':'send_notification', 'notification': f"You have a new message from {self.user.username}"})
+
     async def chat_message(self, event):
         message = event['message']
         sender = event['sender']
 
         #send the message to the websocket
         await self.send(text_data=json.dumps({'message': message, 'sender':sender}))
+
+class NotificationsConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope['user']
+        self.room_group_name = f"notifications_{self.user.username}"
+
+        #join notification group
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        await self.accept()
+        logger.info(f">>>successful connection: notifications >>>>")
+
+    async def disconnect(self, close_code):
+        #leave notification group
+        await self.channel_layer.group_discard(self.room_group_name, self.channel_layer)
+        logger.info(f"<<<closing notification connection close_code: {close_code}<<<")
+
+    async def send_notification(self, event):
+        notification = event['notification']
+        #send notification to websocket
+        await self.send(text_data=json.dumps({'notification':notification}))
 
