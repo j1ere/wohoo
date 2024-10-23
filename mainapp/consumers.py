@@ -142,8 +142,8 @@ class DMConsumer(AsyncWebsocketConsumer):
         #fetch the receiver using CustomUser
         try:
             self.receiver = await settings.AUTH_USER_MODEL.objects.aget(username=self.receiver_username)
-        except settings.AUTH_USER_MODEL.DoesNotExist:
-            await self.send(text_data=json.dumps({'error': 'user does not exist'}))
+        except self.receiver.DoesNotExist:
+            await self.send(text_data=json.dumps({'error': 'receiver does not exist'}))
             await self.close()
             logger.info(f"----websocket connection denied : unkown recipient ----")
         #create a unique room name for the dm between the two users
@@ -155,7 +155,7 @@ class DMConsumer(AsyncWebsocketConsumer):
         logger.info(f">>>websocket connection successful>>>")
 
 
-    async def diconnect(self, close_code):
+    async def disconnect(self, close_code):
         #leave the rooom group
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
@@ -197,7 +197,7 @@ class NotificationsConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         #leave notification group
-        await self.channel_layer.group_discard(self.room_group_name, self.channel_layer)
+        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
         logger.info(f"<<<closing notification connection close_code: {close_code}<<<")
 
     async def send_notification(self, event):

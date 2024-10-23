@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login,authenticate
 from django.contrib.auth.forms import AuthenticationForm
 from django.urls import reverse
@@ -70,6 +70,24 @@ def search_users_view(request):
         users_data = [{'username': user.username} for user in users]
         return JsonResponse({'users': users_data})
     return JsonResponse({'users': []})  
+
+@login_required
+def dm_view(request, receiver_username):
+    receiver = get_object_or_404(CustomUser, username=receiver_username)
+    messages = Message.objects.filter(
+        sender=request.user, recipient=receiver
+    ) | Message.objects.filter(
+        sender=receiver, recipient=request.user
+    ).order_by('timestamp')
+
+    context = {
+        'receiver': receiver,
+        'messages': messages,
+        'user': request.user,
+    }
+
+    return render(request, 'mainapp/dm_page.html', context)
+
 
 def chat_view(request, room_name):
     return render(request, 'mainapp/index.html', {'room_name': room_name})

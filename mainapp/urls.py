@@ -8,4 +8,5 @@ urlpatterns = [
     path('create-group/', views.create_group_view, name='create_group'),
     path('search-users/', views.search_users_view, name='search_users'),
     path("group/<str:room_name>/" ,views.chat_view, name='group'),
+    path('dm/<str:receiver_username>/', views.chat_view, name='dm'),
 ]
