@@ -246,3 +246,8 @@ class Group(models.Model):
             raise PermissionError("only admins can demote admins")
         self.admins.remove(user)
 
+class Notification(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    message = models.TextField()  # Notification content
+    is_read = models.BooleanField(default=False)
+    timestamp = models.DateTimeField(default=timezone.now)

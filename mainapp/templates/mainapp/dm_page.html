@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DM with {{ receiver.username }}</title>
+    <style>
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .message {
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+
+        .message.sent {
+            text-align: right;
+        }
+
+        .message.received {
+            text-align: left;
+        }
+
+        .form {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .form input[type="text"] {
+            width: 80%;
+            padding: 10px;
+        }
+
+        .form button {
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Chat with {{ receiver.username }}</h2>
+
+    <div class="messages" id="message-list">
+        <!-- Initial messages go here -->
+        {% for message in messages %}
+            <div class="message {% if message.sender == user %}sent{% else %}received{% endif %}">
+                <strong>{{ message.sender.username }}:</strong> {{ message.message }}
+                <div><small>{{ message.timestamp }}</small></div>
+            </div>
+        {% empty %}
+            <p>No messages yet. Start the conversation!</p>
+        {% endfor %}
+    </div>
+
+    <form id="message-form" class="form">
+        <input type="text" id="message-input" placeholder="Type a message" autocomplete="off">
+        <button type="submit">Send</button>
+    </form>
+
+    <script>
+        const messageInput = document.getElementById('message-input');
+        const messageForm = document.getElementById('message-form');
+        const messageList = document.getElementById('message-list');
+        
+        // Open WebSocket connection
+        const receiverUsername = "{{ receiver.username }}";
+        const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+        const chatSocket = new WebSocket(
+            `${wsProtocol}://${window.location.host}/ws/dm/${receiverUsername}/`
+        );
+
+        // Listen for messages from WebSocket
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.classList.add(data.sender === "{{ user.username }}" ? 'sent' : 'received');
+            messageElement.innerHTML = `<strong>${data.sender}:</strong> ${data.message} <div><small>Just now</small></div>`;
+            messageList.appendChild(messageElement);
+        };
+
+        // Send message over WebSocket
+        messageForm.onsubmit = function(e) {
+            e.preventDefault();
+            const message = messageInput.value;
+            chatSocket.send(JSON.stringify({
+                'message': message
+            }));
+            messageInput.value = '';
+        };
+
+        // Handle WebSocket close
+        chatSocket.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly');
+        };
+    </script>
+</body>
+</html>
