@@ -95,7 +95,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         #reset the timeout timer
         if hasattr(self, 'timeout_task'):
             self.timeout_task.cancel()
-            self.timeout_task = asyncio.create_task(self.timeout_connection)
+            self.timeout_task = asyncio.create_task(self.timeout_connection())
         text_data_json = json.loads(text_data)#convert the text data to a python dictionary
         message = text_data_json['message']#get the value of message
         #broadcast the message to everyone in the group(completed by the chat_message method)
