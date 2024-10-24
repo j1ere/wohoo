@@ -67,11 +67,24 @@
         const messageList = document.getElementById('message-list');
         
         // Open WebSocket connection
-        const receiverUsername = "{{ receiver.username }}";
-        const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+        //const receiverUsername = "{{ receiver.username }}";
+        //console.log(receiverUsername)
+        // const roomName = "{{ room_name }}";
+        // const wsProtocol = window.location.protocol === "ws";
+
+        // const chatSocket = new WebSocket(
+        //     `${wsProtocol}://${window.location.host}/ws/dm/${roomName}/`
+        // );
+        // const chatSocket = new WebSocket(
+        //     'ws://' + window.location.host + '/ws/dm/' + roomName + '/'
+        // );
+        // Ensure 'receiver_username' is correctly passed in the WebSocket URL
+        const receiverUsername = "{{ receiver.username }}";  // Use receiver.username from Django context
         const chatSocket = new WebSocket(
-            `${wsProtocol}://${window.location.host}/ws/dm/${receiverUsername}/`
+            'ws://' + window.location.host + '/ws/dm/' + receiverUsername + '/'
         );
+
+
 
         // Listen for messages from WebSocket
         chatSocket.onmessage = function(e) {
@@ -81,6 +94,9 @@
             messageElement.classList.add(data.sender === "{{ user.username }}" ? 'sent' : 'received');
             messageElement.innerHTML = `<strong>${data.sender}:</strong> ${data.message} <div><small>Just now</small></div>`;
             messageList.appendChild(messageElement);
+
+            // Auto-scroll to the latest message
+            messageList.scrollTop = messageList.scrollHeight;
         };
 
         // Send message over WebSocket
@@ -94,9 +110,22 @@
         };
 
         // Handle WebSocket close
+        // chatSocket.onclose = function(e) {
+        //     console.error('Chat socket closed unexpectedly');
+        // };
         chatSocket.onclose = function(e) {
-            console.error('Chat socket closed unexpectedly');
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            messageElement.classList.add('received');
+            messageElement.innerHTML = `<strong>System:</strong> Connection closed. Please try again later.`;
+            messageList.appendChild(messageElement);
         };
+        
+        if (window.history.replaceState) {
+            window.history.replaceState(null, null, window.location.href);
+        }
+
+
     </script>
 </body>
 </html>

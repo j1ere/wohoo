@@ -1,3 +1,4 @@
+#my mainapp/urls.py
 from django.urls import path
 from . import views
 
@@ -8,5 +9,5 @@ urlpatterns = [
     path('create-group/', views.create_group_view, name='create_group'),
     path('search-users/', views.search_users_view, name='search_users'),
     path("group/<str:room_name>/" ,views.chat_view, name='group'),
-    path('dm/<str:receiver_username>/', views.chat_view, name='dm'),
+    path('home/<str:receiver_username>/', views.dm_view, name='homedm'),
 ]

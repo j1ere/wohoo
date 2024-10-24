@@ -17,6 +17,18 @@ class CustomUser(AbstractUser):
 
     ]
     category = models.CharField(max_length=10, choices=CATEGORY_CHOICES)
+    
+    last_active = models.DateTimeField(null=True, blank=True)
+
+    def update_last_active(self):
+        self.last_active = timezone.now()
+        self.save(update_fields=['last_active'])
+
+    def is_online(self):
+        # Check if the user has a last_active timestamp and is within the active duration
+        if self.last_active:
+            return (timezone.now() - self.last_active).seconds < 300  # Active within the last 5 minutes
+        return False  # User is considered offline if last_active is not set
 
     def __str__(self):
         """

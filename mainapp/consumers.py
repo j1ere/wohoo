@@ -123,85 +123,229 @@
 #             received. In this case it refers to the chat_message method, defined after this method
 #         """
 
+#consumers.py
+
+# self.user = self.scope['user']
+        # self.receiver_username = self.scope['url_route']['kwargs']['receiver_username']
+
+        # #fetch the receiver using CustomUser
+        # try:
+        #     self.receiver = await CustomUser.objects.aget(username=self.receiver_username)
+        # except self.receiver.DoesNotExist:
+        #     await self.send(text_data=json.dumps({'error': 'receiver does not exist'}))
+        #     await self.close()
+        #     logger.info(f"----websocket connection denied : unkown recipient ----")
+        #create a unique room name for the dm between the two users
+        #self.room_group_name = f"dm_{min(self.user.username, self.receiver_username)}_{max(self.user.username, self.receiver_username)}"
+        
+# import json
+# from channels.generic.websocket import AsyncWebsocketConsumer
+# from channels.db import database_sync_to_async
+# from django.conf import  settings
+# from .models import Message, Notification, CustomUser
+# import asyncio
+# import logging
+
+# logger = logging.getLogger(__name__)
 
 import json
-from channels.generic.websocket import AsyncWebsocketConsumer
-from django.conf import  settings
-from .models import Message, Notification
-import asyncio
 import logging
+from channels.db import database_sync_to_async
+from channels.generic.websocket import AsyncWebsocketConsumer
+from .models import CustomUser, Message, Notification  # Ensure your models are imported
 
 logger = logging.getLogger(__name__)
 
-
 class DMConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.user = self.scope['user']
-        self.receiver_username = self.scope['url_route']['kwargs']['receiver_username']
+        # Get the sender (user initiating the connection)
+        self.sender = self.scope['user']
+        print(self.scope['url_route']['kwargs'])  # Debug: check what's inside kwargs
+        
+        # Get the recipient username from the URL route kwargs
+        self.recipient_username = self.scope['url_route']['kwargs']['recipient']
 
-        #fetch the receiver using CustomUser
-        try:
-            self.receiver = await settings.AUTH_USER_MODEL.objects.aget(username=self.receiver_username)
-        except self.receiver.DoesNotExist:
-            await self.send(text_data=json.dumps({'error': 'receiver does not exist'}))
-            await self.close()
-            logger.info(f"----websocket connection denied : unkown recipient ----")
-        #create a unique room name for the dm between the two users
-        self.room_group_name = f"dm_{min(self.user.username, self.receiver_username)}_{max(self.user.username, self.receiver_username)}"
+        # Fetch the recipient user object using Django's ORM
+        self.recipient = await database_sync_to_async(CustomUser.objects.get)(username=self.recipient_username)
 
-        #join the room group
-        await self.channel_layer.group_add(self.room_group_name,self.channel_name)
+        if not self.recipient:
+            raise ValueError("Recipient is missing in the database.")
+
+        # Create a deterministic room name for DM based on both usernames
+        room_name = f"dm_{sorted([self.sender.username, self.recipient.username])[0]}_{sorted([self.sender.username, self.recipient.username])[1]}"
+        self.room_group_name = f"chat_{room_name}"
+
+        # Join the room group
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
-        logger.info(f">>>websocket connection successful>>>")
-
+        logger.info(f">>> WebSocket connection successful >>>")
 
     async def disconnect(self, close_code):
-        #leave the rooom group
+        # Leave the room group
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
-
-        logger.info(f"<<<websocket connection closed. close code: {close_code}<<<")
-
+        logger.info(f"<<< WebSocket connection closed. Close code: {close_code} <<<")
 
     async def receive(self, text_data):
         data = json.loads(text_data)
         message = data['message']
 
-        #save the message into the database using the message model
-        direct_message = await Message.objects.acreate(sender=self.user, recipient=self.receiver, content=message)
-        
-        #create a notification for the receiver
-        await Notification.objects.acreate(user=self.receiver, message=f"new message from {self.user.username}: {message}")
+        # Save the message into the database using the message model
+        direct_message = await database_sync_to_async(Message.objects.create)(sender=self.sender, recipient=self.recipient, content=message)
 
-        #send the message to the room group
-        await self.channel_layer.group_send(self.room_group_name, {'type':'chat_message', 'message':message, 'sender': self.user.username})
+        # Create a notification for the receiver
+        await database_sync_to_async(Notification.objects.create)(user=self.recipient, message=f"New message from {self.sender.username}: {message}")
 
-        #send notification to the recipient
-        await self.channel_layer.group_send(f"notifications_{self.receiver_username}", {'type':'send_notification', 'notification': f"You have a new message from {self.user.username}"})
+        # Send the message to the room group
+        await self.channel_layer.group_send(self.room_group_name, {'type': 'chat_message', 'message': message, 'sender': self.sender.username})
+
+        # Check if the recipient is online
+        recipient = await self.get_recipient(self.recipient)  # Ensure this method is defined in your consumer
+        if recipient and recipient.is_online():  # Ensure is_online is a method on your CustomUser model
+            # If the recipient is online, send the message instantly
+            await self.send(text_data=json.dumps({
+                'message': message,
+                'sender': self.sender.username
+            }))
+        else:
+            # If the recipient is offline, send a notification
+            await self.channel_layer.group_send(
+                f"user_{self.recipient.username}",
+                {
+                    'type': 'send_notification',
+                    'notification': f"You have a new message from {self.sender.username}"
+                }
+            )
 
     async def chat_message(self, event):
         message = event['message']
         sender = event['sender']
 
-        #send the message to the websocket
-        await self.send(text_data=json.dumps({'message': message, 'sender':sender}))
+        # Send the message to the WebSocket
+        await self.send(text_data=json.dumps({'message': message, 'sender': sender}))
+
+    # Ensure you define get_recipient method
+    async def get_recipient(self, recipient):
+        #return await database_sync_to_async(CustomUser.objects.filter)(username=recipient.username).first()
+        # Get the recipient user from the database
+        return await database_sync_to_async(lambda: CustomUser.objects.filter(username=recipient.username).first())()
 
 class NotificationsConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.user = self.scope['user']
         self.room_group_name = f"notifications_{self.user.username}"
 
-        #join notification group
+        # Join notification group
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
-        logger.info(f">>>successful connection: notifications >>>>")
+        logger.info(f">>> Successful connection: notifications >>>>")
 
     async def disconnect(self, close_code):
-        #leave notification group
+        # Leave notification group
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
-        logger.info(f"<<<closing notification connection close_code: {close_code}<<<")
+        logger.info(f"<<< Closing notification connection Close code: {close_code} <<<")
 
     async def send_notification(self, event):
         notification = event['notification']
-        #send notification to websocket
-        await self.send(text_data=json.dumps({'notification':notification}))
+        # Send notification to WebSocket
+        await self.send(text_data=json.dumps({'notification': notification}))
+
+# class DMConsumer(AsyncWebsocketConsumer):
+#     async def connect(self):
+        
+#         # Get the sender (user initiating the connection)
+#         self.sender = self.scope['user']
+#         print(self.scope['url_route']['kwargs'])  # Add this to check what's inside kwargs
+#         # Get the recipient username from the URL route kwargs (passed in from your URL routing)
+#          # Get the recipient from the URL parameters
+#         self.recipient_username = self.scope['url_route']['kwargs']['recipient']
+
+#         # Fetch the recipient user object using Django's ORM
+#         self.recipient = await database_sync_to_async(CustomUser.objects.get)(username=self.recipient_username)
+
+#         #self.recipient = self.scope['url_route']['kwargs']['recipient']
+#         if not self.recipient:
+#             raise ValueError("Recipient is missing in the databse .")
+
+#         # Create a deterministic room name for DM based on both usernames
+#         room_name = f"dm_{sorted([self.sender.username, self.recipient])[0]}_{sorted([self.sender.username, self.recipient])[1]}"
+#         self.room_group_name = f"chat_{room_name}"
+
+#         #join the room group
+#         await self.channel_layer.group_add(self.room_group_name,self.channel_name)
+#         await self.accept()
+#         logger.info(f">>>websocket connection successful>>>")
+
+
+#     async def disconnect(self, close_code):
+#         #leave the rooom group
+#         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+#         logger.info(f"<<<websocket connection closed. close code: {close_code}<<<")
+
+
+#     async def receive(self, text_data):
+#         data = json.loads(text_data)
+#         message = data['message']
+
+#         #save the message into the database using the message model
+#         direct_message = await Message.objects.acreate(sender=self.sender, recipient=self.recipient, content=message)
+        
+#         #create a notification for the receiver
+#         await Notification.objects.acreate(user=self.recipient, message=f"new message from {self.sender.username}: {message}")
+
+#         #send the message to the room group
+#         await self.channel_layer.group_send(self.room_group_name, {'type':'chat_message', 'message':message, 'sender': self.user.username})
+
+#         #send notification to the recipient
+#         #await self.channel_layer.group_send(f"notifications_{self.receiver_username}", {'type':'send_notification', 'notification': f"You have a new message from {self.user.username}"})
+#         if self.channel_layer.groups.get(f"notifications_{self.recipient_username}"):
+#             await self.channel_layer.group_send(
+#                 f"notifications_{self.recipient_username}",
+#                 {'type': 'send_notification', 'notification': f"You have a new message from {self.sender.username}"}
+#             )
+
+#         # Check if the recipient is online
+#         recipient = await self.get_recipient(self.recipient)
+#         if recipient and recipient.is_online():
+#             # If the recipient is online, send the message instantly
+#             await self.send(text_data=json.dumps({
+#                 'message': message,
+#                 'sender': self.sender.username
+#             }))
+#         else:
+#             # If the recipient is offline, send a notification
+#             await self.channel_layer.group_send(
+#                 f"user_{self.recipient}",
+#                 {
+#                     'type': 'send_notification',
+#                     'notification': f"You have a new message from {self.user.username}"
+#                 }
+#             )
+
+#     async def chat_message(self, event):
+#         message = event['message']
+#         sender = event['sender']
+
+#         #send the message to the websocket
+#         await self.send(text_data=json.dumps({'message': message, 'sender':sender}))
+
+# class NotificationsConsumer(AsyncWebsocketConsumer):
+#     async def connect(self):
+#         self.user = self.scope['user']
+#         self.room_group_name = f"notifications_{self.user.username}"
+
+#         #join notification group
+#         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+#         await self.accept()
+#         logger.info(f">>>successful connection: notifications >>>>")
+
+#     async def disconnect(self, close_code):
+#         #leave notification group
+#         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+#         logger.info(f"<<<closing notification connection close_code: {close_code}<<<")
+
+#     async def send_notification(self, event):
+#         notification = event['notification']
+#         #send notification to websocket
+#         await self.send(text_data=json.dumps({'notification':notification}))
 
