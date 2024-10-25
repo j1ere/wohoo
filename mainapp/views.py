@@ -7,6 +7,8 @@ from .forms import CustomUserCreationForm
 from django.contrib.auth.decorators import login_required
 from .models import *
 from django.http import JsonResponse
+from django.db.models import Q
+from itertools import chain
 
 # Create your views here.
 def signup_view(request):
@@ -37,20 +39,41 @@ def login_view(request):
         form = AuthenticationForm()
     return render(request, 'mainapp/login.html', {'form':form})
 
+
+
+
 @login_required
 def home_view(request):
     user = request.user
-    # Get all DMs where the user is either the sender or recipient
-    dms = Message.objects.filter(sender=user) | Message.objects.filter(recipient=user)
-    
-    # Get all groups where the user is a member
-    groups = user.group_members.all()
-    
+
+
+    # Fetch unread notifications
+    notifications = Notification.objects.filter(user=user, is_read=False)
+
+    # Get all direct messages where the user is either the sender or recipient
+    dms_as_sender = Message.objects.filter(sender=user)
+    dms_as_recipient = Message.objects.filter(recipient=user)
+
+    # Combine the send and receive messages
+    all_dms = chain(dms_as_sender, dms_as_recipient)
+
+    # Create a set to track unique users in the DMs
+    unique_dm_users = set()
+
+    for dm in all_dms:
+        # Add the recipient if the user is the sender, or the sender if the user is the recipient
+        if dm.sender != user:
+            unique_dm_users.add(dm.sender)
+        if dm.recipient != user:
+            unique_dm_users.add(dm.recipient)
+
     context = {
-        'dms': dms.distinct(),
-        'groups': groups,
+        'unique_dm_users': unique_dm_users,
+        'notifications': notifications,
     }
+
     return render(request, 'mainapp/home.html', context)
+
 
 @login_required
 def create_group_view(request):
@@ -90,5 +113,51 @@ def dm_view(request, receiver_username):
     return render(request, 'mainapp/dm_page.html', context)
 
 
+# def chat_view(request, room_name):
+#     return render(request, 'mainapp/index.html', {'room_name': room_name})
+@login_required
 def chat_view(request, room_name):
-    return render(request, 'mainapp/index.html', {'room_name': room_name})
+    user = request.user
+    # You can add logic here to fetch the conversation history, etc.
+    
+    context = {
+        'room_name': room_name,
+        'user': user,
+    }
+    return render(request, 'mainapp/dm_page.html', context)
+
+
+# from channels.layers import get_channel_layer
+# from asgiref.sync import async_to_sync
+
+# def send_notification(request, sender, message):
+#     # Access the channel layer
+#     channel_layer = get_channel_layer()
+
+#     # Send a notification to the 'notifications' group
+#     async_to_sync(channel_layer.group_send)(
+#         'notifications',
+#         {
+#             'type': 'send_notification',  # Maps to the method in the consumer
+#             'message': message,
+#             'sender': sender,
+#         }
+#     )
+# views.py
+
+from django.shortcuts import render
+from .utils import send_notification_to_user
+
+def submit_form(request):
+    if request.method == 'POST':
+        # Your form processing logic here
+        
+        sender = request.user.username
+        message = "You have a new notification!"
+        recipient = "john_doe"  # Replace with dynamic recipient based on logic
+        
+        # Trigger notification
+        send_notification_to_user(sender, message, recipient)
+
+        # Continue with your view logic
+        return render(request, 'some_template.html')

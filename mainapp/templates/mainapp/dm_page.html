@@ -48,7 +48,7 @@
         <!-- Initial messages go here -->
         {% for message in messages %}
             <div class="message {% if message.sender == user %}sent{% else %}received{% endif %}">
-                <strong>{{ message.sender.username }}:</strong> {{ message.message }}
+                <strong>{{ message.sender.username }}:</strong> {{ message.content }}
                 <div><small>{{ message.timestamp }}</small></div>
             </div>
         {% empty %}
@@ -66,18 +66,7 @@
         const messageForm = document.getElementById('message-form');
         const messageList = document.getElementById('message-list');
         
-        // Open WebSocket connection
-        //const receiverUsername = "{{ receiver.username }}";
-        //console.log(receiverUsername)
-        // const roomName = "{{ room_name }}";
-        // const wsProtocol = window.location.protocol === "ws";
-
-        // const chatSocket = new WebSocket(
-        //     `${wsProtocol}://${window.location.host}/ws/dm/${roomName}/`
-        // );
-        // const chatSocket = new WebSocket(
-        //     'ws://' + window.location.host + '/ws/dm/' + roomName + '/'
-        // );
+        
         // Ensure 'receiver_username' is correctly passed in the WebSocket URL
         const receiverUsername = "{{ receiver.username }}";  // Use receiver.username from Django context
         const chatSocket = new WebSocket(

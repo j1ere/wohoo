@@ -9,12 +9,12 @@
             font-family: 'Arial', sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #eef2f3; /* Light background for better contrast */
+            background-color: #eef2f3;
         }
 
         h2, h3 {
             color: #333;
-            margin-bottom: 10px; /* Added margin for spacing */
+            margin-bottom: 10px;
         }
 
         .container {
@@ -27,22 +27,22 @@
             padding: 15px;
             margin-bottom: 20px;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s ease, box-shadow 0.2s ease; /* Added transition */
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .card:hover {
-            transform: scale(1.02); /* Slight scaling effect on hover */
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); /* Deeper shadow on hover */
+            transform: scale(1.02);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
         }
 
         .card a {
             text-decoration: none;
             color: #007bff;
-            transition: color 0.2s ease; /* Transition for link color */
+            transition: color 0.2s ease;
         }
 
         .card a:hover {
-            color: #0056b3; /* Darker color on link hover */
+            color: #0056b3;
         }
 
         .create-group, .search-users {
@@ -55,29 +55,29 @@
 
         input[type="text"], input[type="search"] {
             width: 100%;
-            padding: 12px; /* Increased padding for better touch targets */
+            padding: 12px;
             margin-bottom: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
-            transition: border-color 0.2s ease; /* Transition for border color */
+            transition: border-color 0.2s ease;
         }
 
         input[type="text"]:focus, input[type="search"]:focus {
-            border-color: #007bff; /* Highlight border on focus */
+            border-color: #007bff;
         }
 
         button {
             background-color: #007bff;
             color: #fff;
-            padding: 12px 20px; /* Increased padding for better touch targets */
+            padding: 12px 20px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            transition: background-color 0.2s ease; /* Transition for button */
+            transition: background-color 0.2s ease;
         }
 
         button:hover {
-            background-color: #0056b3; /* Darker background on hover */
+            background-color: #0056b3;
         }
 
         .search-results {
@@ -91,28 +91,49 @@
             margin-bottom: 8px;
             padding: 10px;
             border-radius: 4px;
-            transition: background-color 0.2s ease; /* Transition for background color */
+            transition: background-color 0.2s ease;
         }
 
         .search-results li:hover {
-            background-color: #e6e6e6; /* Highlight on hover */
+            background-color: #e6e6e6;
         }
 
         .search-results li a {
             color: #007bff;
             text-decoration: none;
-            transition: color 0.2s ease; /* Transition for link color */
+            transition: color 0.2s ease;
         }
 
         .search-results li a:hover {
-            color: #0056b3; /* Darker color on link hover */
+            color: #0056b3;
+        }
+        .notifications-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background-color: white;
+            border: 1px solid #ddd;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            width: 300px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
+        .notifications-dropdown.show {
+            display: block;
+        }
+
+        .notification-icon.new-notification .fas.fa-bell {
+            color: red; /* Change color of bell icon when there's a new notification */
         }
 
     </style>
 </head>
 <body>
     <h2>Welcome, {{ request.user.username }}</h2>
-    
+
     <!-- Notification Icon -->
     <div class="notification-icon" onclick="toggleNotifications()">
         <i class="fas fa-bell"></i>
@@ -127,16 +148,13 @@
     <!-- DM Section -->
     <div class="container">
         <h3>Your Direct Messages</h3>
-        {% if dms %}
+        {% if unique_dm_users %}
             <div class="card">
-                <ul>
-                    {% for dm in dms %}
+                <ul id="dm-list">
+                    {% for user in unique_dm_users %}
                         <li>
-                            {% if dm.recipient != request.user %}
-                                DM with <a href="{% url 'chat_view' room_name=dm.recipient.username %}">{{ dm.recipient.username }}</a>
-                            {% else %}
-                                DM with <a href="{% url 'chat_view' room_name=dm.sender.username %}">{{ dm.sender.username }}</a>
-                            {% endif %}
+                            <!-- Link to the chat with the user -->
+                            <a href="#" class="dm-link" data-username="{{ user.username }}">DM with {{ user.username }}</a>
                         </li>
                     {% endfor %}
                 </ul>
@@ -215,26 +233,108 @@
             dropdown.style.display = (dropdown.style.display === 'none' || dropdown.style.display === '') ? 'block' : 'none';
         }
 
-        // Connect to WebSocket for notifications
-        const notificationSocket = new WebSocket('ws://' + window.location.host + '/ws/notifications/');
+        // Handle DM click and WebSocket connection
+        const dmLinks = document.querySelectorAll('.dm-link');
+        dmLinks.forEach(link => {
+            link.addEventListener('click', function (event) {
+                event.preventDefault();
+                const roomName = this.getAttribute('data-username');
 
-        notificationSocket.onmessage = function(e) {
-            const data = JSON.parse(e.data);
-            updateNotificationUI(data);
-        };
+                // Establish WebSocket connection
+                connectToDMWebSocket(roomName);
 
-        function updateNotificationUI(data) {
-            var countElement = document.getElementById('notification-count');
-            var listElement = document.getElementById('notifications-list');
+                // Redirect to the DM page
+                window.location.href = `/chat/home/${roomName}/`;
+            });
+        });
 
-            // Update notification count
-            countElement.textContent = parseInt(countElement.textContent) + 1;
+        function connectToDMWebSocket(roomName) {
+            const chatSocket = new WebSocket(`ws://${window.location.host}/ws/dm/${roomName}/`);
+            
+            chatSocket.onmessage = function (e) {
+                const data = JSON.parse(e.data);
+                console.log('Message received:', data);
+            };
 
-            // Add new notification to the list
-            var li = document.createElement('li');
-            li.innerHTML = `<a href="/chat/home/${data.sender}/">${data.message}</a>`;
-            listElement.appendChild(li);
+            chatSocket.onclose = function (e) {
+                console.error('Chat socket closed unexpectedly');
+            };
         }
+
+
+        // // Connect to WebSocket for notifications
+        // const notificationSocket = new WebSocket('ws://' + window.location.host + '/ws/notifications/');
+
+        // notificationSocket.onmessage = function(e) {
+        //     const data = JSON.parse(e.data);
+        //     updateNotificationUI(data);
+        // };
+
+        // function updateNotificationUI(data) {
+        //     var countElement = document.getElementById('notification-count');
+        //     var listElement = document.getElementById('notifications-list');
+
+        //     // Update notification count
+        //     countElement.textContent = parseInt(countElement.textContent) + 1;
+
+        //     // Add new notification to the list
+        //     var li = document.createElement('li');
+        //     li.innerHTML = `<a href="/chat/home/${data.sender}/">${data.message}</a>`;
+        //     listElement.appendChild(li);
+        // }
+        document.addEventListener('DOMContentLoaded', function() {
+            // Create WebSocket connection
+            const notificationSocket = new WebSocket('ws://' + window.location.host + '/ws/notifications/');
+
+            // WebSocket opened
+            notificationSocket.onopen = function() {
+                console.log("WebSocket connection established.");
+            };
+
+            // WebSocket error handling
+            notificationSocket.onerror = function(e) {
+                console.error("WebSocket error: ", e);
+            };
+
+            // WebSocket closed
+            notificationSocket.onclose = function(e) {
+                console.log("WebSocket connection closed.");
+            };
+
+            // Handle incoming WebSocket messages (notifications)
+            notificationSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                console.log("Notification received: ", data);
+                updateNotificationUI(data);
+            };
+
+            // Function to update notification UI
+            function updateNotificationUI(data) {
+                const countElement = document.getElementById('notification-count');
+                const listElement = document.getElementById('notifications-list');
+
+                // Increment the notification count
+                let currentCount = parseInt(countElement.textContent);
+                countElement.textContent = currentCount + 1;
+
+                // Add new notification to the notification dropdown list
+                const li = document.createElement('li');
+                li.innerHTML = `<a href="/chat/home/${data.sender}/">${data.message}</a>`;
+                listElement.appendChild(li);
+
+                // Optionally, you can toggle a "new notification" class on the notification icon
+                const notificationIcon = document.querySelector('.notification-icon');
+                notificationIcon.classList.add('new-notification');
+            }
+        });
+
+        function toggleNotifications() {
+            // This function can toggle the visibility of the notifications dropdown
+            const dropdown = document.getElementById('notifications-dropdown');
+            dropdown.classList.toggle('show');
+        }
+
+    
     </script>
 </body>
 </html>
