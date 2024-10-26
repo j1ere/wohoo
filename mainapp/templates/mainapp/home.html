@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
+    <title>{% block title %}Home{% endblock %}</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 0;
             background-color: #eef2f3;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
         }
 
         h2, h3 {
@@ -17,70 +20,32 @@
             margin-bottom: 10px;
         }
 
-        .container {
-            margin: 20px 0;
-        }
-
-        .card {
-            background-color: #fff;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .card:hover {
-            transform: scale(1.02);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-        }
-
-        .card a {
-            text-decoration: none;
-            color: #007bff;
-            transition: color 0.2s ease;
-        }
-
-        .card a:hover {
-            color: #0056b3;
-        }
-
-        .create-group, .search-users {
-            padding: 20px;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-        }
-
-        input[type="text"], input[type="search"] {
+        .main-container {
+            display: flex;
             width: 100%;
-            padding: 12px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            transition: border-color 0.2s ease;
+            height: 100%;
         }
 
-        input[type="text"]:focus, input[type="search"]:focus {
-            border-color: #007bff;
+        .left-section {
+            width: 30%;
+            max-width: 300px;
+            background-color: #f5f5f5;
+            padding: 15px;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
         }
 
-        button {
-            background-color: #007bff;
-            color: #fff;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-
-        button:hover {
-            background-color: #0056b3;
+        .search-users {
+            margin-bottom: 20px;
         }
 
         .search-results {
+            position: relative;
+            z-index: 1000;
+            width: 100%;
+            min-height: 100px;
+            height: auto;
+            background-color: #333;
             list-style: none;
             padding: 0;
             margin-top: 10px;
@@ -107,135 +72,168 @@
         .search-results li a:hover {
             color: #0056b3;
         }
-        .notifications-dropdown {
-            display: none;
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background-color: white;
-            border: 1px solid #ddd;
-            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
-            width: 300px;
-            max-height: 300px;
+
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .right-section {
+            flex: 1;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .chat-box {
+            flex-grow: 1;
+            border-radius: 8px;
+            background-color: #4a9117;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
             overflow-y: auto;
-            z-index: 1000;
+            padding: 15px;
         }
 
-        .notifications-dropdown.show {
-            display: block;
+        input[type="search"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
         }
 
-        .notification-icon.new-notification .fas.fa-bell {
-            color: red; /* Change color of bell icon when there's a new notification */
+        button {
+            background-color: #007bff;
+            color: #fff;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
         }
 
+        .notification-icon {
+            position: relative;
+        }
+
+        #dm-list a {
+            color: #007bff;
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
-    <h2>Welcome, {{ request.user.username }}</h2>
+    <div class="main-container">
+        <div class="left-section">
+            <h3>Welcome, {{ request.user.username }}</h3>
 
-    <!-- Notification Icon -->
-    <div class="notification-icon" onclick="toggleNotifications()">
-        <i class="fas fa-bell"></i>
-        <span class="notification-count" id="notification-count">0</span>
-        <div class="notifications-dropdown" id="notifications-dropdown">
-            <ul id="notifications-list">
-                <!-- Notifications will be dynamically inserted here -->
-            </ul>
-        </div>
-    </div>
-
-    <!-- DM Section -->
-    <div class="container">
-        <h3>Your Direct Messages</h3>
-        {% if unique_dm_users %}
-            <div class="card">
-                <ul id="dm-list">
-                    {% for user in unique_dm_users %}
-                        <li>
-                            <!-- Link to the chat with the user -->
-                            <a href="#" class="dm-link" data-username="{{ user.username }}">DM with {{ user.username }}</a>
-                        </li>
-                    {% endfor %}
-                </ul>
+            <div class="container">
+                <div class="create-group">
+                    <h3>Create a New Group</h3>
+                    <form method="POST" action="{% url 'create_group' %}">
+                        {% csrf_token %}
+                        <input type="text" name="group_name" placeholder="Enter group name" required>
+                        <button type="submit">Create Group</button>
+                    </form>
+                </div>
             </div>
-        {% else %}
-            <p>No Direct Messages available.</p>
-        {% endif %}
-    </div>
 
-    <!-- Group Section -->
-    <div class="container">
-        <h3>Your Groups</h3>
-        {% if groups %}
-            <div class="card">
-                <ul>
+            <div class="container search-users">
+                <h3>Search for a Person to DM</h3>
+                <input type="search" id="user-search" placeholder="Search by username..." onkeyup="searchUser()">
+                <ul class="search-results" id="search-results"></ul>
+            </div>
+
+            <div class="container">
+                <h3>Your Direct Messages</h3>
+                <div class="card">
+                    <ul id="dm-list">
+                        {% for user in unique_dm_users %}
+                            <li><a href="#" class="dm-link" data-username="{{ user.username }}">DM with {{ user.username }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="container">
+                <h3>Your Groups</h3>
+                <div class="card">
+                    <!-- <ul>
+                        {% for group in groups %}
+                            <li><a href="{% url 'chat_view' room_name=group.name %}">{{ group.name }}</a></li>
+                        {% empty %}
+                            <li>No groups available.</li>
+                        {% endfor %}
+                    </ul> -->
                     {% for group in groups %}
-                        <li>
-                            <a href="{% url 'chat_view' room_name=group.name %}">{{ group.name }}</a>
-                        </li>
-                    {% endfor %}
-                </ul>
+                    <h2>{{ group.name }}</h2>
+                    <ul>
+                        {% for membership in group.group_memberships.all %}
+                            <li>{{ membership.user.username }} - Role: {{ membership.get_role_display }}</li>
+                        {% empty %}
+                            <li>No members in this group.</li>
+                        {% endfor %}
+                    </ul>
+                {% endfor %}
+
+                </div>
             </div>
-        {% else %}
-            <p>No groups available.</p>
-        {% endif %}
-    </div>
+        </div>
 
-    <!-- Search Users to DM -->
-    <div class="container search-users">
-        <h3>Search for a Person to DM</h3>
-        <input type="search" id="user-search" placeholder="Search by username..." onkeyup="searchUser()">
-        <ul class="search-results" id="search-results"></ul>
-    </div>
-
-    <!-- Create New Group -->
-    <div class="container">
-        <div class="create-group">
-            <h3>Create a New Group</h3>
-            <form method="POST" action="{% url 'create_group' %}">
-                {% csrf_token %}
-                <input type="text" name="group_name" placeholder="Enter group name" required>
-                <button type="submit">Create Group</button>
-            </form>
+        <div class="right-section">
+            <div class="chat-box">
+                <h2>{% if receiver %}Chat with {{ receiver.username }}{% else %}Chat Area{% endif %}</h2>
+                {% block content %}
+                <!-- chat content here -->
+                {% endblock %}
+            </div>
+            <div>
+                <input type="text" id="message-input" placeholder="Type your message...">
+                <button onclick="sendMessage()">Send</button>
+            </div>
         </div>
     </div>
 
-    <!-- JavaScript for Search -->
     <script>
         function searchUser() {
-            var query = document.getElementById('user-search').value;
-            var resultsDiv = document.getElementById('search-results');
+            const query = document.getElementById('user-search').value;
+            const resultsDiv = document.getElementById('search-results');
 
             if (query.length > 0) {
-                fetch(`../search-users/?q=${query}`)
-                    .then(response => response.json())
+                fetch(`/chat/search-users/?q=${query}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
                     .then(data => {
                         resultsDiv.innerHTML = '';
-                        if (data.users.length > 0) {
+                        if (data.users && data.users.length > 0) {
                             data.users.forEach(user => {
-                                var li = document.createElement('li');
+                                const li = document.createElement('li');
                                 li.innerHTML = `<a href="/chat/home/${user.username}/">DM with ${user.username}</a>`;
                                 resultsDiv.appendChild(li);
                             });
                         } else {
                             resultsDiv.innerHTML = '<li>No users found.</li>';
                         }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching user data:', error);
+                        resultsDiv.innerHTML = '<li>Error fetching users. Please try again later.</li>';
                     });
             } else {
                 resultsDiv.innerHTML = '';
             }
         }
 
-        // Toggle Notifications Dropdown
-        function toggleNotifications() {
-            var dropdown = document.getElementById('notifications-dropdown');
-            dropdown.style.display = (dropdown.style.display === 'none' || dropdown.style.display === '') ? 'block' : 'none';
-        }
-
         // Handle DM click and WebSocket connection
-        const dmLinks = document.querySelectorAll('.dm-link');
-        dmLinks.forEach(link => {
+        document.querySelectorAll('.dm-link').forEach(link => {
             link.addEventListener('click', function (event) {
                 event.preventDefault();
                 const roomName = this.getAttribute('data-username');
@@ -260,81 +258,6 @@
                 console.error('Chat socket closed unexpectedly');
             };
         }
-
-
-        // // Connect to WebSocket for notifications
-        // const notificationSocket = new WebSocket('ws://' + window.location.host + '/ws/notifications/');
-
-        // notificationSocket.onmessage = function(e) {
-        //     const data = JSON.parse(e.data);
-        //     updateNotificationUI(data);
-        // };
-
-        // function updateNotificationUI(data) {
-        //     var countElement = document.getElementById('notification-count');
-        //     var listElement = document.getElementById('notifications-list');
-
-        //     // Update notification count
-        //     countElement.textContent = parseInt(countElement.textContent) + 1;
-
-        //     // Add new notification to the list
-        //     var li = document.createElement('li');
-        //     li.innerHTML = `<a href="/chat/home/${data.sender}/">${data.message}</a>`;
-        //     listElement.appendChild(li);
-        // }
-        document.addEventListener('DOMContentLoaded', function() {
-            // Create WebSocket connection
-            const notificationSocket = new WebSocket('ws://' + window.location.host + '/ws/notifications/');
-
-            // WebSocket opened
-            notificationSocket.onopen = function() {
-                console.log("WebSocket connection established.");
-            };
-
-            // WebSocket error handling
-            notificationSocket.onerror = function(e) {
-                console.error("WebSocket error: ", e);
-            };
-
-            // WebSocket closed
-            notificationSocket.onclose = function(e) {
-                console.log("WebSocket connection closed.");
-            };
-
-            // Handle incoming WebSocket messages (notifications)
-            notificationSocket.onmessage = function(e) {
-                const data = JSON.parse(e.data);
-                console.log("Notification received: ", data);
-                updateNotificationUI(data);
-            };
-
-            // Function to update notification UI
-            function updateNotificationUI(data) {
-                const countElement = document.getElementById('notification-count');
-                const listElement = document.getElementById('notifications-list');
-
-                // Increment the notification count
-                let currentCount = parseInt(countElement.textContent);
-                countElement.textContent = currentCount + 1;
-
-                // Add new notification to the notification dropdown list
-                const li = document.createElement('li');
-                li.innerHTML = `<a href="/chat/home/${data.sender}/">${data.message}</a>`;
-                listElement.appendChild(li);
-
-                // Optionally, you can toggle a "new notification" class on the notification icon
-                const notificationIcon = document.querySelector('.notification-icon');
-                notificationIcon.classList.add('new-notification');
-            }
-        });
-
-        function toggleNotifications() {
-            // This function can toggle the visibility of the notifications dropdown
-            const dropdown = document.getElementById('notifications-dropdown');
-            dropdown.classList.toggle('show');
-        }
-
-    
     </script>
 </body>
 </html>

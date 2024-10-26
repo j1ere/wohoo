@@ -1,9 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DM with {{ receiver.username }}</title>
+{% extends 'mainapp/home.html'%}
+    {% block title %} DM with {{ receiver.username }} {% endblock %}
+{% block content %}
     <style>
         .messages {
             height: 300px;
@@ -116,5 +113,4 @@
 
 
     </script>
-</body>
-</html>
+{% endblock %}

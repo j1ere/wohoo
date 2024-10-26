@@ -139,3 +139,25 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'level': 'DEBUG',  # Ensure this is set to DEBUG
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'DEBUG',  # Set to DEBUG to capture debug-level logs
+        },
+        'your_app_name': {  # Replace with the name of your Django app
+            'handlers': ['console'],
+            'level': 'DEBUG',  # Ensure this captures DEBUG messages
+            'propagate': True,
+        },
+    },
+}

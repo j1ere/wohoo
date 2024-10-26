@@ -231,29 +231,6 @@ class DMConsumer(AsyncWebsocketConsumer):
         # Get the recipient user from the database
         return await database_sync_to_async(lambda: CustomUser.objects.filter(username=recipient.username).first())()
 
-# class NotificationsConsumer(AsyncWebsocketConsumer):
-#     async def connect(self):
-#         self.user = self.scope['user']
-#         self.room_group_name = f"notifications_{self.user.username}"
-
-#         # Join notification group
-#         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-#         await self.accept()
-#         logger.info(f">>> Successful connection: notifications >>>>")
-
-#     async def disconnect(self, close_code):
-#         # Leave notification group
-#         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
-#         logger.info(f"<<< Closing notification connection Close code: {close_code} <<<")
-
-#     async def send_notification(self, event):
-#         notification = event['notification']
-#         # Send notification to WebSocket
-#         #await self.send(text_data=json.dumps({'notification': notification}))
-#         await self.send(text_data=json.dumps({
-#             'message': notification['message'],
-#             'sender': notification['sender'],
-#         }))
 
 class NotificationsConsumer(AsyncWebsocketConsumer):
     async def connect(self):

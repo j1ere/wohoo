@@ -9,6 +9,8 @@ from .models import *
 from django.http import JsonResponse
 from django.db.models import Q
 from itertools import chain
+import json
+
 
 # Create your views here.
 def signup_view(request):
@@ -41,11 +43,9 @@ def login_view(request):
 
 
 
-
 @login_required
 def home_view(request):
     user = request.user
-
 
     # Fetch unread notifications
     notifications = Notification.objects.filter(user=user, is_read=False)
@@ -58,21 +58,22 @@ def home_view(request):
     all_dms = chain(dms_as_sender, dms_as_recipient)
 
     # Create a set to track unique users in the DMs
-    unique_dm_users = set()
+    unique_dm_users = {dm.sender if dm.recipient == user else dm.recipient for dm in all_dms}
 
-    for dm in all_dms:
-        # Add the recipient if the user is the sender, or the sender if the user is the recipient
-        if dm.sender != user:
-            unique_dm_users.add(dm.sender)
-        if dm.recipient != user:
-            unique_dm_users.add(dm.recipient)
+    #groups = Group.objects.filter(members=user)
+    # Fetch all groups and prefetch related memberships
+    groups = Group.objects.prefetch_related('group_memberships__user').all()
+
 
     context = {
         'unique_dm_users': unique_dm_users,
         'notifications': notifications,
+        'groups': groups,
     }
 
+    print("Context data:", context)
     return render(request, 'mainapp/home.html', context)
+
 
 
 @login_required
@@ -87,13 +88,80 @@ def create_group_view(request):
         return redirect('home')
 
 
-def search_users_view(request):
-    query = request.GET.get('q', '')
+# def search_users_view(request):
+#     query = request.GET.get('q', '')
+#     if query:
+#         users = CustomUser.objects.filter(username__icontains=query).exclude(username=request.user.username)
+#         users_data = [{'username': user.username} for user in users]
+#         print(json.dumps({'users': users_data}))
+#         return JsonResponse({'users': users_data})
+#     return JsonResponse({'users': []})  
+import json
+import logging
+from django.http import JsonResponse
+from django.views.decorators.http import require_GET
+from .models import CustomUser  # Make sure to import your CustomUser model
+
+# Set up logging
+logger = logging.getLogger(__name__)
+# @login_required
+# @require_GET  # Ensure this view only responds to GET requests
+# def search_users_view(request):
+#     logger.info("========================================Search view called============================")  # Log each time the view is called
+#     query = request.GET.get('q', '').strip()  # Strip whitespace from query
+#     if query:  # Only search if the query is not empty
+#         users = CustomUser.objects.filter(username__icontains=query).exclude(username=request.user.username)
+#         users_data = [{'username': user.username} for user in users]
+        
+#         # Log the response for debugging purposes
+#         logger.debug("User search results: %s", json.dumps({'users': users_data}))
+        
+#         return JsonResponse({'users': users_data})
+    
+#     # Return an empty list if the query is empty
+#     return JsonResponse({'users': []})
+
+from django.http import JsonResponse
+from django.views.decorators.http import require_GET
+from .models import CustomUser
+
+@require_GET
+def search_users(request):
+    query = request.GET.get('q', '').strip()
+
     if query:
-        users = CustomUser.objects.filter(username__icontains=query).exclude(username=request.user.username)
-        users_data = [{'username': user.username} for user in users]
-        return JsonResponse({'users': users_data})
-    return JsonResponse({'users': []})  
+        # Use icontains for case-insensitive matching
+        users = CustomUser.objects.filter(username__icontains=query).values('username')
+
+        # Format the data as a list of dictionaries
+        user_data = list(users)
+
+        # Prepare the JSON response
+        response_data = {
+            'users': user_data
+        }
+    else:
+        response_data = {
+            'users': []
+        }
+
+    return JsonResponse(response_data)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 @login_required
 def dm_view(request, receiver_username):
@@ -115,16 +183,16 @@ def dm_view(request, receiver_username):
 
 # def chat_view(request, room_name):
 #     return render(request, 'mainapp/index.html', {'room_name': room_name})
-@login_required
-def chat_view(request, room_name):
-    user = request.user
-    # You can add logic here to fetch the conversation history, etc.
+# @login_required
+# def chat_view(request, room_name):
+#     user = request.user
+#     # You can add logic here to fetch the conversation history, etc.
     
-    context = {
-        'room_name': room_name,
-        'user': user,
-    }
-    return render(request, 'mainapp/dm_page.html', context)
+#     context = {
+#         'room_name': room_name,
+#         'user': user,
+#     }
+#     return render(request, 'mainapp/dm_page.html', context)
 
 
 # from channels.layers import get_channel_layer
@@ -161,3 +229,6 @@ def submit_form(request):
 
         # Continue with your view logic
         return render(request, 'some_template.html')
+
+def group_chat(request):
+    return render(request, 'mainapp/group_page.html')
