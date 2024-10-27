@@ -151,8 +151,9 @@
 import json
 import logging
 from channels.db import database_sync_to_async
+from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
-from .models import CustomUser, Message, Notification  # Ensure your models are imported
+from .models import *  # Ensure your models are imported
 
 logger = logging.getLogger(__name__)
 
@@ -259,4 +260,63 @@ class NotificationsConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'message': notification['message'],
             'sender': notification['sender']
+        }))
+
+
+
+class GroupConsumers(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.group_name = self.scope['url_route']['kwargs']['group_name']  # Get the group name from the URL
+        self.group_channel_name = f"group_{self.group_name}"  # Unique channel name for the group
+
+        # Join the group channel
+        await self.channel_layer.group_add(
+            self.group_channel_name,
+            self.channel_name
+        )
+
+        await self.accept()  # Accept the WebSocket connection
+        logger.info(">>>GROUP WEBSOCKET CONNECTION SUCCESS>>>")
+
+    async def disconnect(self, close_code):
+         # Leave the group channel
+        await self.channel_layer.group_discard(
+            self.group_channel_name,
+            self.channel_name
+        )
+        logger.info(f"<<<GROUP WEBSOCKET DISCONNECT SUCCESSFUL. CLOSE CODE {close_code}<<<")
+
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        message = data['message']
+        user_id = data['user_id']  # Get the user ID from the message data
+        group_name = data['group_name']  # Get the group name from the message data
+
+        # Save the message to the database
+        user = await sync_to_async(CustomUser.objects.get)(id=user_id)
+        group = await sync_to_async(Group.objects.get)(name=group_name)
+        message_instance = await sync_to_async(Message.objects.create)(
+            sender=user,
+            group=group,
+            content=message
+        )
+
+        # Broadcast the message to the group
+        await self.channel_layer.group_send(
+            self.group_channel_name,
+            {
+                'type': 'group_message',  # Specify the event type
+                'message': message,
+                'user_id': user.id,
+                'timestamp': message_instance.timestamp.isoformat() # Send timestamp as ISO format
+            }
+        )
+
+
+    async def group_message(self, event):
+         # Send the message to WebSocket
+        await self.send(text_data=json.dumps({
+            'message': event['message'],
+            'user_id': event['user_id'],
+            'timestamp': event['timestamp']
         }))

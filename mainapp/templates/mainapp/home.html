@@ -153,35 +153,41 @@
                 <div class="card">
                     <ul id="dm-list">
                         {% for user in unique_dm_users %}
-                            <li><a href="#" class="dm-link" data-username="{{ user.username }}">DM with {{ user.username }}</a></li>
+                            {% if user.username %}
+                            <li><a href="{% url 'homedm' user.username %}" class="dm-link" data-username="{{ user.username }}">DM with {{ user.username }}</a></li>
+                            {% else %}
+                            <h3>no username</h3>
+                            {%endif%}
                         {% endfor %}
                     </ul>
                 </div>
             </div>
-
+            <!-- groups -->
             <div class="container">
                 <h3>Your Groups</h3>
                 <div class="card">
-                    <!-- <ul>
-                        {% for group in groups %}
-                            <li><a href="{% url 'chat_view' room_name=group.name %}">{{ group.name }}</a></li>
-                        {% empty %}
-                            <li>No groups available.</li>
-                        {% endfor %}
-                    </ul> -->
                     {% for group in groups %}
-                    <h2>{{ group.name }}</h2>
-                    <ul>
-                        {% for membership in group.group_memberships.all %}
-                            <li>{{ membership.user.username }} - Role: {{ membership.get_role_display }}</li>
-                        {% empty %}
-                            <li>No members in this group.</li>
-                        {% endfor %}
-                    </ul>
-                {% endfor %}
-
+                        <h2><a href="{% url 'group_chat' group.name %}" class="group-link" data-username="{{group.name}}">{{ group.name }}</a></h2>
+                        
+                        {% if request.user in group.members.all %}
+                            <p>You are a member of this group.</p>
+                        {% elif group.join_policy == 'open' %}
+                            <a href="{% url 'join_group' group.name %}">Join Group</a>
+                        {% elif group.join_policy == 'approval' %}
+                            <a href="{% url 'join_group' group.name %}">Request to Join</a>
+                        {% endif %}
+            
+                        <ul>
+                            {% for membership in group.group_memberships.all %}
+                                <li>{{ membership.user.username }} - Role: {{ membership.get_role_display }}</li>
+                            {% empty %}
+                                <li>No members in this group.</li>
+                            {% endfor %}
+                        </ul>
+                    {% endfor %}
                 </div>
             </div>
+            
         </div>
 
         <div class="right-section">
@@ -191,10 +197,10 @@
                 <!-- chat content here -->
                 {% endblock %}
             </div>
-            <div>
+            <!-- <div>
                 <input type="text" id="message-input" placeholder="Type your message...">
                 <button onclick="sendMessage()">Send</button>
-            </div>
+            </div> -->
         </div>
     </div>
 
@@ -242,7 +248,8 @@
                 connectToDMWebSocket(roomName);
 
                 // Redirect to the DM page
-                window.location.href = `/chat/home/${roomName}/`;
+                // window.location.href = `/chat/home/${roomName}/`;
+                window.location.href = this.getAttribute('href')
             });
         });
 
@@ -256,6 +263,35 @@
 
             chatSocket.onclose = function (e) {
                 console.error('Chat socket closed unexpectedly');
+
+            };
+        }
+
+
+        // group group click and websocket connection
+        document.querySelectorAll('group-link').forEach(link =>{
+            link.addEventListener('click', function (event){
+                event.preventDefault();
+                const roomName = this.getAttribute('data-username');
+
+                // establish websocket connection
+                connectToGroupWebSocket(roomName);
+
+                // redirect to the group page
+                window.location.href= 'chat/group/${roomName}/'
+            })
+        })
+
+        function connectToGroupWebSocket(roomName){
+            const chatSocket = new WebSocket(`ws://${window.location.host}/ws/chat/group/${roomName}/`);
+
+            chatSocket.onmessage = function(e){
+                const data = JSON.parse(e.data);
+                console.log("message received:", data);
+            };
+
+            chatSocket.onclose = function(e){
+                console.error("web socket closed unexpectedly");
             };
         }
     </script>

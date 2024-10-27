@@ -162,6 +162,11 @@ class Group(models.Model):
         members (ManyToManyField): The users who are members of the group.
         admins (ManyToManyField): The users who are administrators of the group.
     """
+    JOIN_POLICY_CHOICES = [
+        ('open', 'Open to All'),
+        ('approval', 'Admin Approval Required'),
+    ]
+
     name = models.CharField(max_length=255)
     members = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
@@ -172,6 +177,11 @@ class Group(models.Model):
     )
     #members = models.ManyToManyField(settings.AUTH_USER_MODEL, through=GroupMembership,related_name='group')
     admins = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name= 'administered_groups')#admins will have privilages
+    join_policy = models.CharField(
+        max_length=20,
+        choices=JOIN_POLICY_CHOICES,
+        default='open'
+    )
 
     def __str__(self):
         """
@@ -182,7 +192,7 @@ class Group(models.Model):
         """
         return self.name
     
-    def add_member(self,user, added_by=None):
+    #ef add_member(self,user, added_by=None):
         """
         Add a new member to the group.
 
@@ -194,9 +204,14 @@ class Group(models.Model):
             PermissionError: If the user trying to add members is not an admin.
         """
         """add a new member to the group"""
-        if not self.is_admin(added_by):
+        # if not self.is_admin(added_by):
+        #     raise PermissionError("only admins can add members")
+        # GroupMembership.objects.create(user=user, group=self, added_by=added_by)
+    def add_member(self, user, added_by=None):
+        # Allow adding the first admin/member without permission check
+        if added_by and not self.is_admin(added_by):
             raise PermissionError("only admins can add members")
-        GroupMembership.objects.create(user=user, group=self, added_by=added_by)
+        GroupMembership.objects.create(user=user, group=self, added_by=added_by)    
 
     def remove_member(self, user,removed_by):
         """
@@ -257,6 +272,18 @@ class Group(models.Model):
         if not self.is_admin(removed_by):
             raise PermissionError("only admins can demote admins")
         self.admins.remove(user)
+
+
+class JoinRequest(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete = models.CASCADE)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name = 'join_requests')
+    status = models.CharField(
+        max_length=20,
+        choices=[('pending', 'Pending'), ('approved', 'Approved'), ('denied', 'Denied')],
+        default = 'pending',
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+
 
 class Notification(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
