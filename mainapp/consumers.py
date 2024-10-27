@@ -199,7 +199,12 @@ class DMConsumer(AsyncWebsocketConsumer):
         logger.info(f"Notification created for {self.recipient.username}")
 
         # Send the message to the room group
-        await self.channel_layer.group_send(self.room_group_name, {'type': 'chat_message', 'message': message, 'sender': self.sender.username})
+        await self.channel_layer.group_send(self.room_group_name, {
+            'type': 'chat_message',
+            'message': message,
+            'sender': self.sender.username,
+            'timestamp': direct_message.timestamp.isoformat() # Send timestamp as ISO format
+            })
 
         # Check if the recipient is online
         recipient = await self.get_recipient(self.recipient)  # Ensure this method is defined in your consumer
@@ -219,12 +224,15 @@ class DMConsumer(AsyncWebsocketConsumer):
                 }
             )
 
+    # Send the message to the WebSocket
     async def chat_message(self, event):
         message = event['message']
         sender = event['sender']
+        timestamp = event['timestamp']
 
-        # Send the message to the WebSocket
-        await self.send(text_data=json.dumps({'message': message, 'sender': sender}))
+        await self.send(text_data=json.dumps({'message': message, 'sender': sender, 'timestamp': timestamp}))
+
+
 
     # Ensure you define get_recipient method
     async def get_recipient(self, recipient):

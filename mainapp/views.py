@@ -135,6 +135,7 @@ def search_users(request):
 
 @login_required
 def dm_view(request, receiver_username):
+    user = request.user
     receiver = get_object_or_404(CustomUser, username=receiver_username)
     messages = Message.objects.filter(
         sender=request.user, recipient=receiver
@@ -142,26 +143,65 @@ def dm_view(request, receiver_username):
         sender=receiver, recipient=request.user
     ).order_by('timestamp')
 
+    # Get all direct messages where the user is either the sender or recipient
+    dms_as_sender = Message.objects.filter(sender=user, recipient__isnull=False)
+    dms_as_recipient = Message.objects.filter(recipient=user, sender__isnull=False)
+
+    # Combine the send and receive messages
+    all_dms = chain(dms_as_sender, dms_as_recipient)
+
+    # Create a set to track unique users in the DMs
+    unique_dm_users = {dm.sender if dm.recipient == user else dm.recipient for dm in all_dms}
+
+    # Ensure usernames are valid (non-empty)
+    unique_dm_users = [u for u in unique_dm_users if u.username]
+
+    #groups = Group.objects.filter(members=user)
+    # Fetch all groups and prefetch related memberships
+    groups = Group.objects.prefetch_related('group_memberships__user').all()
+
     context = {
         'receiver': receiver,
         'messages': messages,
-        
+        'unique_dm_users': unique_dm_users,
+        'groups': groups
     }
 
     return render(request, 'mainapp/dm_page.html', context)
 
 
 def group_chat(request, group_name):
+    user = request.user
     # Retrieve the group by its name
     group = get_object_or_404(Group, name=group_name)
 
     # Fetch messages related to the group
     messages = Message.objects.filter(group=group).order_by('timestamp')
 
+     # Get all direct messages where the user is either the sender or recipient
+    dms_as_sender = Message.objects.filter(sender=user, recipient__isnull=False)
+    dms_as_recipient = Message.objects.filter(recipient=user, sender__isnull=False)
+
+    # Combine the send and receive messages
+    all_dms = chain(dms_as_sender, dms_as_recipient)
+
+    # Create a set to track unique users in the DMs
+    unique_dm_users = {dm.sender if dm.recipient == user else dm.recipient for dm in all_dms}
+
+    # Ensure usernames are valid (non-empty)
+    unique_dm_users = [u for u in unique_dm_users if u.username]
+
+    #groups = Group.objects.filter(members=user)
+    # Fetch all groups and prefetch related memberships
+    groups = Group.objects.prefetch_related('group_memberships__user').all()
+
+
     context = {
         'group': group,
         'messages': messages,
         'user': request.user,  # Pass the logged-in user for context
+        'unique_dm_users': unique_dm_users,
+        'groups': groups
     }
 
     return render(request, 'mainapp/group_page.html', context)

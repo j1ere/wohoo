@@ -78,7 +78,7 @@
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
             messageElement.classList.add(data.sender === "{{ user.username }}" ? 'sent' : 'received');
-            messageElement.innerHTML = `<strong>${data.sender}:</strong> ${data.message} <div><small>Just now</small></div>`;
+            messageElement.innerHTML = `<strong>${data.sender}:</strong> ${data.message} <div><small>${data.timestamp}</small></div>`;
             messageList.appendChild(messageElement);
 
             // Auto-scroll to the latest message
