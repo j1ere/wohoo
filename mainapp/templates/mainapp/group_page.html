@@ -57,7 +57,7 @@
 
         // Ensure 'group_id' is correctly passed in the WebSocket URL
         const groupName = "{{ group.name }}";  // Use group.name from Django context
-        const userId = "{{ user.id }}";  // Get the logged-in user's ID
+        const userName = "{{ user.username }}";  // Get the logged-in user's ID
         const chatSocket = new WebSocket(
             'ws://' + window.location.host + '/ws/chat/group/' + groupName + '/'
         );
@@ -67,8 +67,8 @@
             const data = JSON.parse(e.data);
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
-            messageElement.classList.add(data.user_id === userId ? 'sent' : 'received');
-            messageElement.innerHTML = `<strong>${data.user_id === userId ? "You" : data.user_id}:</strong> ${data.message} <div><small>${new Date(data.timestamp).toLocaleTimeString()}</small></div>`;
+            messageElement.classList.add(data.user_username === userName ? 'sent' : 'received');
+            messageElement.innerHTML = `<strong>${data.user_username === userName ? "You" : data.user_username}:</strong> ${data.message} <div><small>${new Date(data.timestamp).toLocaleTimeString()}</small></div>`;
             messageList.appendChild(messageElement);
 
             // Auto-scroll to the latest message
@@ -81,7 +81,7 @@
             const message = messageInput.value;
             chatSocket.send(JSON.stringify({
                 'message': message,
-                'user_id': userId,
+                'user_name': userName,
                 'group_name': groupName
             }));
             messageInput.value = '';

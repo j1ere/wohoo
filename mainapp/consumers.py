@@ -289,11 +289,11 @@ class GroupConsumers(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         data = json.loads(text_data)
         message = data['message']
-        user_id = data['user_id']  # Get the user ID from the message data
+        user_username = data['user_name']  # Get the user username from the message data
         group_name = data['group_name']  # Get the group name from the message data
 
         # Save the message to the database
-        user = await sync_to_async(CustomUser.objects.get)(id=user_id)
+        user = await sync_to_async(CustomUser.objects.get)(username=user_username)
         group = await sync_to_async(Group.objects.get)(name=group_name)
         message_instance = await sync_to_async(Message.objects.create)(
             sender=user,
@@ -307,7 +307,7 @@ class GroupConsumers(AsyncWebsocketConsumer):
             {
                 'type': 'group_message',  # Specify the event type
                 'message': message,
-                'user_id': user.id,
+                'user_username': user.username,
                 'timestamp': message_instance.timestamp.isoformat() # Send timestamp as ISO format
             }
         )
@@ -317,6 +317,6 @@ class GroupConsumers(AsyncWebsocketConsumer):
          # Send the message to WebSocket
         await self.send(text_data=json.dumps({
             'message': event['message'],
-            'user_id': event['user_id'],
+            'user_username': event['user_username'],
             'timestamp': event['timestamp']
         }))
