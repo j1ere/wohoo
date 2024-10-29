@@ -240,19 +240,21 @@
                 <h3>Your Groups</h3>
                 <div class="card">
                     {% for group in groups %}
-                        <h2><a href="{% url 'group_chat' group.name %}" class="group-link" data-username="{{group.name}}">{{ group.name }}</a></h2>
+                        <h2><a href="{% url 'group_chat' group.name %}" class="group-link" data-username="{{group.name}}" data-id="{{ group.id }}">{{ group.name }}</a></h2>
                         
                         {% if request.user in group.members.all %}
                             <p>You are a member of this group.</p>
                         {% elif group.join_policy == 'open' %}
                             <a href="{% url 'join_group' group.name %}">Join Group</a>
                         {% elif group.join_policy == 'approval' %}
-                            <a href="{% url 'join_group' group.name %}" data-id="{{group.id}}" class="join-request">Request to Join</a>
+                            <a href="#" data-id="{{group.id}}" class="join-request">Request to Join</a>
                         {% endif %}
             
                         <ul>
                             {% for membership in group.group_memberships.all %}
-                                <li data-membership-role = "{{ membership.get_role_display }}" >{{ membership.user.username }} - Role: {{ membership.get_role_display }}</li>
+                                {% if membership.get_role_display == 'admin' %}
+                                    <li data-membership-role="{{ membership.get_role_display }}">{{ membership.user.username }} - Role: {{ membership.get_role_display }}</li>
+                                {% endif %}
                             {% empty %}
                                 <li>No members in this group.</li>
                             {% endfor %}
@@ -277,27 +279,26 @@
     
     
     <script>
+    document.addEventListener('DOMContentLoaded', () => {
         const notificationList = document.getElementById('notification-list');
 
         const groupId = this.getAttribute('data-id');
-        const role = this.getAttribute('data-membership-role');
         const userId = "{{request.user.id}}"; //from django context
         const userName = "{{request.user.username}}";
         const joinRequest = document.getElementsByClassName('join-request');
 
-        const chatSocket = new WebSocket(
+        const notificationChatSocket = new WebSocket(
             'ws://' + window.location.host + '/ws/notifications/'
         );
 
-        //listen for messages from websocket
-        chatSocket.onmessage = function (e){
-            const data = JSON.parse(e.data);
+        //flag to check if the websocket connection is open
+        let isSocketOpen = false;
 
-            if( data.target_group_id === groupId && data.target_role === role && data.admin_user_ids.includes(userId)){
-                // display notification only for matching admins
-                displayNotification(data.message);
-            }
-        };
+        //handle websocket connection open event
+        notificationChatSocket.onopen = function() {
+            console.log("Websocket connection open");
+            isSocketOpen = true; //mark the connection open
+        }
 
         function displayNotification(message){
             const messageElement = document.createElement('div');
@@ -308,18 +309,73 @@
             notificationList.scrollTop = notificationList.scrollHeight;
         }
 
-        //send message over websocket when a join request is clicked
+        //handle click on group links
+        const groupLinks = document.querySelectorAll('.group-link');
+        groupLinks.forEach(link => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault(); // Prevent the default link behavior
+
+                const groupId = link.getAttribute('data-id');
+                const groupName = link.getAttribute('data-username');
+
+                // Log group information
+                console.log(`Group ID: ${groupId}`);
+                console.log(`Group Name: ${groupName}`);
+
+                // Listen for messages from WebSocket
+                notificationChatSocket.onmessage = function(e) {
+                    const data = JSON.parse(e.data);
+                    
+                    // Check if the user is eligible to see notifications
+                    if (data.admin_user_ids.includes(userId)) {
+                        // Assuming target_group_id and target_role are included in the data
+                        const targetGroupId = data.target_group_id; // Set appropriately in the backend
+                        const targetRole = data.target_role; // Set appropriately in the backend
+                        
+                        // Display notification if the group ID matches
+                        if (targetGroupId === groupId) {
+                            displayNotification(data.message);
+                        }
+                    }
+                };
+
+                // Additional logic for navigating to the group chat can be added here
+            });
+        });
+        // ///////////////////////////////////
+
+         // Send message over WebSocket when a join request is clicked
         Array.from(joinRequest).forEach(request => {
-            request.onclick = function (e){
+            request.onclick = function(e) {
+                e.preventDefault(); // Prevent the default link behavior
+
                 const groupId = this.getAttribute('data-id');
-                chatSocket.send(JSON.stringify({
+
+                // Send the join request via WebSocket
+                notificationChatSocket.send(JSON.stringify({
                     'username': userName,
                     'group_id': groupId,
                 }));
+
+                console.log(`Join request sent for Group ID: ${groupId}`);
             };
         });
+
+
+        // Handle WebSocket errors
+        notificationChatSocket.onerror = function(e) {
+            console.error("WebSocket error:", e);
+        };
+
+        // Handle WebSocket connection close event
+        notificationChatSocket.onclose = function(e) {
+            console.log("WebSocket connection closed:", e);
+            isSocketOpen = false; // Mark the connection as closed
+        };
+    });
         
-        
+
+// end of notification js
     
         document.addEventListener('DOMContentLoaded', function () {
             const groupNameInput = document.querySelector('input[name="group_name"]');
