@@ -250,16 +250,7 @@ def join_group(request, group_name):
 
     logger.info('=====================i was saved to the database ============================')
     
-    #send websocket notification to admins
-    # channel_layer = get_channel_layer()
-    # async_to_sync(channel_layer.group_send)(
-    #     f"notifications_{group_name}",
-    #     {
-    #         "type": "new_join_request",
-    #         "request_id": join_request.id,
-    #         "username": request.user.username,
-    #     }
-    # )
+   
     logger.info(f"===============FINISHED EXECUTION====================")
     logger.info(f"===============FINISHED EXECUTION====================")
     return JsonResponse({"message": "A join request has been successfully sent for you"}, safe=False)

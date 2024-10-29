@@ -314,6 +314,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     async def disconnect(self, close_code):
         # Remove from group on disconnect
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
+        logger.info(f"=====>>>CONNECTION TO NOTIFICATIONS FAILURE=====>>>>>")
 
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -322,9 +323,13 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         requesting_user = data.get('username')
         
         # Filter for admin users in the specific group
-        admin_memberships = GroupMembership.objects.filter(group_id=group_id, role='admin')
-        admin_user_ids = admin_memberships.values_list('user_id', flat=True)
+        # admin_memberships = await sync_to_async(GroupMembership.objects.filter(group_id=group_id, role='admin'))
+        # admin_user_ids = await sync_to_async(admin_memberships.values_list('user_id', flat=True))
         
+        # Get admin user IDs for the specified group using database_sync_to_async
+        admin_user_ids = await database_sync_to_async(
+            lambda: list(GroupMembership.objects.filter(group_id=group_id, role='admin').values_list('user_id', flat=True))
+        )()
         # Prepare the notification message with role and group details
         notification = {
             'message': f"New join request from {requesting_user}",

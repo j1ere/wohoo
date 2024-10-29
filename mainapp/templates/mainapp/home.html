@@ -275,106 +275,68 @@
             
         </div>
     </div>
-    
-    
-    
     <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const notificationList = document.getElementById('notification-list');
+        document.addEventListener('DOMContentLoaded', function () {
+            const notificationList = document.getElementById('notification-list');
+            const joinRequest = document.getElementsByClassName('join-request');
+            
+            const notificationChatSocket = new WebSocket(
+                'ws://' + window.location.host + '/ws/notifications/'
+            );
 
-        const groupId = this.getAttribute('data-id');
-        const userId = "{{request.user.id}}"; //from django context
-        const userName = "{{request.user.username}}";
-        const joinRequest = document.getElementsByClassName('join-request');
+            notificationChatSocket.onopen = function() {
+                console.log("WebSocket connection open");
+            };
 
-        const notificationChatSocket = new WebSocket(
-            'ws://' + window.location.host + '/ws/notifications/'
-        );
+            //receive from websocket
 
-        //flag to check if the websocket connection is open
-        let isSocketOpen = false;
+            notificationChatSocket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                const userId = '{{request.user.id}}'
+                // Check if current user is in the admin user list
+                if (data.admin_user_ids && data.admin_user_ids.includes(parseInt(userId))) {
+                    displayNotification(data.message);    
+                }
+                   
+            };
 
-        //handle websocket connection open event
-        notificationChatSocket.onopen = function() {
-            console.log("Websocket connection open");
-            isSocketOpen = true; //mark the connection open
-        }
+          
 
-        function displayNotification(message){
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('notification');
-            messageElement.innerHTML = message;
-            notificationList.appendChild(messageElement);
-            //autoscroll to the latest notification
-            notificationList.scrollTop = notificationList.scrollHeight;
-        }
+            function displayNotification(message) {
+                const messageElement = document.createElement('div');
+                messageElement.classList.add('notification');
+                messageElement.innerHTML = message;
+                notificationList.appendChild(messageElement);
+                notificationList.scrollTop = notificationList.scrollHeight;
+            }
 
-        //handle click on group links
-        const groupLinks = document.querySelectorAll('.group-link');
-        groupLinks.forEach(link => {
-            link.addEventListener('click', (event) => {
-                event.preventDefault(); // Prevent the default link behavior
-
-                const groupId = link.getAttribute('data-id');
-                const groupName = link.getAttribute('data-username');
-
-                // Log group information
-                console.log(`Group ID: ${groupId}`);
-                console.log(`Group Name: ${groupName}`);
-
-                // Listen for messages from WebSocket
-                notificationChatSocket.onmessage = function(e) {
-                    const data = JSON.parse(e.data);
-                    
-                    // Check if the user is eligible to see notifications
-                    if (data.admin_user_ids.includes(userId)) {
-                        // Assuming target_group_id and target_role are included in the data
-                        const targetGroupId = data.target_group_id; // Set appropriately in the backend
-                        const targetRole = data.target_role; // Set appropriately in the backend
-                        
-                        // Display notification if the group ID matches
-                        if (targetGroupId === groupId) {
-                            displayNotification(data.message);
-                        }
-                    }
+            //send notification
+            Array.from(joinRequest).forEach(request => {
+                request.onclick = function(e) {
+                    e.preventDefault();
+                    const groupId = this.getAttribute('data-id');
+                    notificationChatSocket.send(JSON.stringify({
+                        'username': "{{ request.user.username }}",
+                        'group_id': groupId,
+                    }));
+                    console.log(`Join request sent for Group ID: ${groupId}`);
                 };
-
-                // Additional logic for navigating to the group chat can be added here
             });
-        });
-        // ///////////////////////////////////
 
-         // Send message over WebSocket when a join request is clicked
-        Array.from(joinRequest).forEach(request => {
-            request.onclick = function(e) {
-                e.preventDefault(); // Prevent the default link behavior
-
-                const groupId = this.getAttribute('data-id');
-
-                // Send the join request via WebSocket
-                notificationChatSocket.send(JSON.stringify({
-                    'username': userName,
-                    'group_id': groupId,
-                }));
-
-                console.log(`Join request sent for Group ID: ${groupId}`);
+            notificationChatSocket.onerror = function(e) {
+                console.error("WebSocket error:", e);
+            };
+            
+            notificationChatSocket.onclose = function(e) {
+                console.log("WebSocket closed:", e);
             };
         });
 
-
-        // Handle WebSocket errors
-        notificationChatSocket.onerror = function(e) {
-            console.error("WebSocket error:", e);
-        };
-
-        // Handle WebSocket connection close event
-        notificationChatSocket.onclose = function(e) {
-            console.log("WebSocket connection closed:", e);
-            isSocketOpen = false; // Mark the connection as closed
-        };
-    });
-        
-
+    </script>
+    
+    
+    <script>
+    
 // end of notification js
     
         document.addEventListener('DOMContentLoaded', function () {
@@ -425,62 +387,6 @@
             }
         }
 
-        // Handle DM click and WebSocket connection
-        document.querySelectorAll('.dm-link').forEach(link => {
-            link.addEventListener('click', function (event) {
-                event.preventDefault();
-                const roomName = this.getAttribute('data-username');
-
-                // Establish WebSocket connection
-                connectToDMWebSocket(roomName);
-
-                // Redirect to the DM page
-                // window.location.href = `/chat/home/${roomName}/`;
-                window.location.href = this.getAttribute('href')
-            });
-        });
-
-        function connectToDMWebSocket(roomName) {
-            const chatSocket = new WebSocket(`ws://${window.location.host}/ws/dm/${roomName}/`);
-            
-            chatSocket.onmessage = function (e) {
-                const data = JSON.parse(e.data);
-                console.log('Message received:', data);
-            };
-
-            chatSocket.onclose = function (e) {
-                console.error('Chat socket closed unexpectedly');
-
-            };
-        }
-
-
-        // group group click and websocket connection
-        document.querySelectorAll('group-link').forEach(link =>{
-            link.addEventListener('click', function (event){
-                event.preventDefault();
-                const roomName = this.getAttribute('data-username');
-
-                // establish websocket connection
-                connectToGroupWebSocket(roomName);
-
-                // redirect to the group page
-                window.location.href= 'chat/group/${roomName}/'
-            })
-        })
-
-        function connectToGroupWebSocket(roomName){
-            const chatSocket = new WebSocket(`ws://${window.location.host}/ws/chat/group/${roomName}/`);
-
-            chatSocket.onmessage = function(e){
-                const data = JSON.parse(e.data);
-                console.log("message received:", data);
-            };
-
-            chatSocket.onclose = function(e){
-                console.error("web socket closed unexpectedly");
-            };
-        }
     </script>
 </body>
 </html>
