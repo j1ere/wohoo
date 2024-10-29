@@ -23,4 +23,7 @@ urlpatterns = [
     path('approve-request/<int:request_id>/<str:action>', views.approve_request, name='approve_request'),
 
     path('manage-requests/<str:group_name>/', views.manage_join_requests, name='manage_join_requests'),
+
+    path('notifications/approve/', views.approve_request, name='approve_request'),
+    path('notifications/deny/', views.deny_request, name='deny_request'),
 ]

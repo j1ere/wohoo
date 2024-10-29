@@ -295,17 +295,21 @@
                 const userId = '{{request.user.id}}'
                 // Check if current user is in the admin user list
                 if (data.admin_user_ids && data.admin_user_ids.includes(parseInt(userId))) {
-                    displayNotification(data.message);    
+                    displayNotification(data.message,data.target_group_id, data.user_id);    
                 }
                    
             };
 
           
 
-            function displayNotification(message) {
+            function displayNotification(message, groupId, userId) {
                 const messageElement = document.createElement('div');
                 messageElement.classList.add('notification');
-                messageElement.innerHTML = message;
+                messageElement.innerHTML =`
+                    ${message}
+                    <button onclick="handleApproval('${groupId}', '${userId}', true)">Approve</button>
+                    <button onclick="handleApproval('${groupId}', '${userId}', false)">Deny</button>
+                `;
                 notificationList.appendChild(messageElement);
                 notificationList.scrollTop = notificationList.scrollHeight;
             }
@@ -317,6 +321,7 @@
                     const groupId = this.getAttribute('data-id');
                     notificationChatSocket.send(JSON.stringify({
                         'username': "{{ request.user.username }}",
+                        'user_id': "{{ request.user.id }}",
                         'group_id': groupId,
                     }));
                     console.log(`Join request sent for Group ID: ${groupId}`);
@@ -333,7 +338,45 @@
         });
 
     </script>
-    
+    <script>
+        function handleApproval(groupId, userId, isApproved) {
+            fetch(`../notifications/${isApproved ? 'approve' : 'deny'}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'), // You might need to implement this function to get the CSRF token
+                },
+                body: JSON.stringify({
+                    group_id: groupId,
+                    user_id: userId,
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data.message);
+                // Optionally, remove the notification from the UI after handling it
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    // Check if this cookie string begins with the name we want
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+
+    </script>
     
     <script>
     

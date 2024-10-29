@@ -154,9 +154,30 @@ from channels.db import database_sync_to_async
 from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from .models import *  # Ensure your models are imported
+from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.auth import get_user_model
 
 logger = logging.getLogger(__name__)
 
+
+"""
+The error you're encountering, AttributeError: 'str' object has no attribute 'objects', indicates that settings.AUTH_USER_MODEL is being treated as a string rather than a model class. In Django, settings.AUTH_USER_MODEL is typically a string that specifies the user model (in the format 'app_label.ModelName'), but you need the actual model class to perform queries.
+
+Fixing the Error
+To resolve this issue, you can use Django's get_user_model function, which returns the user model class based on the value of settings.AUTH_USER_MODEL. Here’s how you can update your code:
+
+Import get_user_model: Ensure you import the function at the top of your file:
+
+python
+Copy code
+from django.contrib.auth import get_user_model
+Get the User Model Class: Replace your existing line with the following code, using get_user_model to retrieve the user class:
+
+python
+Copy code
+User = get_user_model()  # Get the user model class
+specific_user = await database_sync_to_async(User.objects.get)(id=requesting_user
+"""
 class DMConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         # Get the sender (user initiating the connection)
@@ -321,22 +342,28 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         # Example payload to broadcast, assuming group_id is sent in data
         group_id = data.get('group_id')
         requesting_user = data.get('username')
-        
-        # Filter for admin users in the specific group
-        # admin_memberships = await sync_to_async(GroupMembership.objects.filter(group_id=group_id, role='admin'))
-        # admin_user_ids = await sync_to_async(admin_memberships.values_list('user_id', flat=True))
-        
-        # Get admin user IDs for the specified group using database_sync_to_async
-        admin_user_ids = await database_sync_to_async(
-            lambda: list(GroupMembership.objects.filter(group_id=group_id, role='admin').values_list('user_id', flat=True))
-        )()
-        # Prepare the notification message with role and group details
-        notification = {
-            'message': f"New join request from {requesting_user}",
-            'target_group_id': group_id,
-            'target_role': 'admin',
-            'admin_user_ids': list(admin_user_ids)  # List of admin user IDs
-        }
+        requesting_user_id = data.get('user_id')
+
+        try:
+            # Get admin user IDs for the specified group using database_sync_to_async
+            admin_user_ids = await database_sync_to_async(
+                lambda: list(GroupMembership.objects.filter(group_id=group_id, role='admin').values_list('user_id', flat=True))
+            )()
+            User = get_user_model()  # Get the user model class
+            specific_user = await database_sync_to_async(User.objects.get)(id=requesting_user_id)
+            specific_group = await database_sync_to_async(Group.objects.get)(id=group_id)
+
+            await database_sync_to_async(JoinRequest.objects.create)(user=specific_user,group=specific_group,status='pending')
+            # Prepare the notification message with role and group details
+            notification = {
+                'message': f"New join request from {requesting_user}",
+                'target_group_id': group_id,
+                'target_role': 'admin',
+                'user_id': requesting_user_id,
+                'admin_user_ids': list(admin_user_ids)  # List of admin user IDs
+            }
+        except ObjectDoesNotExist:
+            logger.info(f"--------------------some issues with accuracy of variables received from front end------------------------")
 
         # Send the notification to the WebSocket group
         await self.channel_layer.group_send(

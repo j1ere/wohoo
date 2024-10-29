@@ -207,11 +207,18 @@ class Group(models.Model):
         # if not self.is_admin(added_by):
         #     raise PermissionError("only admins can add members")
         # GroupMembership.objects.create(user=user, group=self, added_by=added_by)
+    # def add_member(self, user, added_by=None):
+    #     # Allow adding the first admin/member without permission check
+    #     if added_by and not self.is_admin(added_by):
+    #         raise PermissionError("only admins can add members")
+    #     GroupMembership.objects.create(user=user, group=self, added_by=added_by) 
+
     def add_member(self, user, added_by=None):
         # Allow adding the first admin/member without permission check
         if added_by and not self.is_admin(added_by):
-            raise PermissionError("only admins can add members")
-        GroupMembership.objects.create(user=user, group=self, added_by=added_by)    
+            raise PermissionError("Only admins can add members")
+        GroupMembership.objects.create(user=user, group=self, added_by=added_by, role='member')
+    
 
     def remove_member(self, user,removed_by):
         """

@@ -101,10 +101,20 @@ def create_group_view(request):
 
         if group_name and join_policy:
             # Create the new group and add the current user as an admin
+            if Group.objects.filter(name=group_name).exists():
+                return JsonResponse({"message": "group name already taken"})
+            
             group = Group.objects.create(name=group_name, join_policy=join_policy)
-            #automatically add the creator as an admin and member
-            group.admins.add(request.user)
-            group.members.add(request.user)
+            """
+            work on a compound key for group name and group id to avoid potential same groupname error
+            """
+            # Automatically add the creator as an admin and member using GroupMembership
+            GroupMembership.objects.create(
+                user=request.user,
+                group=group,
+                added_by=request.user,
+                role='admin'  # Set the creator's role as admin
+            )
 
             # group.add_member(request.user, added_by=request.user)
             # group.add_admin(request.user, promoted_by=request.user)
@@ -293,3 +303,38 @@ def manage_join_requests(request, group_name):
 
     requests = group.join_requests.filter(status='pending')
     return render(request, 'manage_join_requests.html', {'group':group, 'requests':requests})
+
+
+from django.contrib.auth import get_user_model
+@csrf_exempt  # Only use this if you're handling CSRF token manually, otherwise use the appropriate decorator
+def approve_request(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        group_id = data.get('group_id')
+        user_id = data.get('user_id')
+
+        # Fetch the group and user
+        group = Group.objects.get(id=group_id)
+        User = get_user_model() #get the user model class
+        user = User.objects.get(id=user_id)
+
+        # Add the user as a member
+        group.add_member(user)
+
+        # Optionally, mark the joinrequest as approved
+        JoinRequest.objects.filter(group=group, user=user).update(status='approved')
+
+        return JsonResponse({"message": "User approved and added to the group"})
+
+
+@csrf_exempt
+def deny_request(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        group_id = data.get('group_id')
+        user_id = data.get('user_id')
+
+        # Optionally, mark the notification as denied
+        JoinRequest.objects.filter(group_id=group_id, user_id=user_id).update(status='denied')
+
+        return JsonResponse({"message": "User denied the request"})
