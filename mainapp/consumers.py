@@ -194,9 +194,9 @@ class DMConsumer(AsyncWebsocketConsumer):
         direct_message = await database_sync_to_async(Message.objects.create)(sender=self.sender, recipient=self.recipient, content=message)
 
         # Create a notification for the receiver
-        await database_sync_to_async(Notification.objects.create)(user=self.recipient, message=f"New message from {self.sender.username}: {message}")
+        #await database_sync_to_async(Notification.objects.create)(user=self.recipient, message=f"New message from {self.sender.username}: {message}")
         
-        logger.info(f"Notification created for {self.recipient.username}")
+        #logger.info(f"Notification created for {self.recipient.username}")
 
         # Send the message to the room group
         await self.channel_layer.group_send(self.room_group_name, {
@@ -207,22 +207,22 @@ class DMConsumer(AsyncWebsocketConsumer):
             })
 
         # Check if the recipient is online
-        recipient = await self.get_recipient(self.recipient)  # Ensure this method is defined in your consumer
-        if recipient and recipient.is_online():  # Ensure is_online is a method on your CustomUser model
-            # If the recipient is online, send the message instantly
-            await self.send(text_data=json.dumps({
-                'message': message,
-                'sender': self.sender.username
-            }))
-        else:
-            # If the recipient is offline, send a notification
-            await self.channel_layer.group_send(
-                f"user_{self.recipient.username}",
-                {
-                    'type': 'send_notification',
-                    'notification': f"You have a new message from {self.sender.username}"
-                }
-            )
+        # recipient = await self.get_recipient(self.recipient)  # Ensure this method is defined in your consumer
+        # if recipient and recipient.is_online():  # Ensure is_online is a method on your CustomUser model
+        #     # If the recipient is online, send the message instantly
+        #     await self.send(text_data=json.dumps({
+        #         'message': message,
+        #         'sender': self.sender.username
+        #     }))
+        # else:
+        #     # If the recipient is offline, send a notification
+        #     await self.channel_layer.group_send(
+        #         f"user_{self.recipient.username}",
+        #         {
+        #             'type': 'send_notification',
+        #             'notification': f"You have a new message from {self.sender.username}"
+        #         }
+        #     )
 
     # Send the message to the WebSocket
     async def chat_message(self, event):
@@ -239,36 +239,6 @@ class DMConsumer(AsyncWebsocketConsumer):
         #return await database_sync_to_async(CustomUser.objects.filter)(username=recipient.username).first()
         # Get the recipient user from the database
         return await database_sync_to_async(lambda: CustomUser.objects.filter(username=recipient.username).first())()
-
-
-class NotificationsConsumer(AsyncWebsocketConsumer):
-    async def connect(self):
-        self.user = self.scope['user']
-        if self.user.is_authenticated:
-            self.room_group_name = f"notifications_{self.user.username}"
-
-            # Join notification group
-            await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-            await self.accept()
-            logger.info(f">>> WebSocket connection established for {self.user.username}")
-        else:
-            await self.close()
-
-    async def disconnect(self, close_code):
-        if self.user.is_authenticated:
-            # Leave notification group
-            await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
-            logger.info(f"<<< WebSocket connection closed for {self.user.username} <<<")
-
-    # Receive notification from group
-    async def send_notification(self, event):
-        notification = event['notification']
-        
-        # Send message to WebSocket
-        await self.send(text_data=json.dumps({
-            'message': notification['message'],
-            'sender': notification['sender']
-        }))
 
 
 
@@ -328,3 +298,50 @@ class GroupConsumers(AsyncWebsocketConsumer):
             'user_username': event['user_username'],
             'timestamp': event['timestamp']
         }))
+
+
+#group join request notification
+class NotificationConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.group_name = "notifications"
+        
+        # Add this channel to the notifications group
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        
+        await self.accept()
+        logger.info(f"=====>>>CONNECTION TO NOTIFICATIONS SUCCESS=====>>>>>")
+
+    async def disconnect(self, close_code):
+        # Remove from group on disconnect
+        await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        # Example payload to broadcast, assuming group_id is sent in data
+        group_id = data.get('group_id')
+        requesting_user = data.get('username')
+        
+        # Filter for admin users in the specific group
+        admin_memberships = GroupMembership.objects.filter(group_id=group_id, role='admin')
+        admin_user_ids = admin_memberships.values_list('user_id', flat=True)
+        
+        # Prepare the notification message with role and group details
+        notification = {
+            'message': f"New join request from {requesting_user}",
+            'target_group_id': group_id,
+            'target_role': 'admin',
+            'admin_user_ids': list(admin_user_ids)  # List of admin user IDs
+        }
+
+        # Send the notification to the WebSocket group
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                'type': 'send_notification',
+                'notification': notification
+            }
+        )
+
+    async def send_notification(self, event):
+        # Send message to WebSocket
+        await self.send(text_data=json.dumps(event['notification']))  

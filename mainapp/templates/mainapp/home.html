@@ -123,6 +123,61 @@
             color: #007bff;
             text-decoration: none;
         }
+
+       /* Initially hide the join policy dropdown with height 0 and overflow hidden */
+        .create-group select[name="join_policy"] {
+            height: 0;
+            overflow: hidden;
+            transition: height 0.4s ease;
+            display: block;
+            opacity: 0;
+        }
+
+        /* When .show-dropdown class is added, set the height to auto for smooth drop-down */
+        .create-group.show-dropdown select[name="join_policy"] {
+            height: auto;
+            opacity: 1;
+            margin-top: 10px;
+        }
+
+        /* Styling for the dropdown */
+        .create-group select[name="join_policy"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #fff;
+            cursor: pointer;
+        }
+
+        /* Background overlay for the popup */
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5); /* semi-transparent black */
+            display: none; /* Hidden by default */
+            z-index: 999; /* Below the popup */
+        }
+
+        /* Popup container styling */
+        #joinRequestsPopup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 500px;
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            z-index: 1000; /* Above the overlay */
+            display: none; /* Hidden by default */
+        }
+
     </style>
 </head>
 <body>
@@ -136,6 +191,13 @@
                     <form method="POST" action="{% url 'create_group' %}">
                         {% csrf_token %}
                         <input type="text" name="group_name" placeholder="Enter group name" required>
+
+                        <!-- Dropdown for Join Policy -->
+                        <select name="join_policy" required>
+                            <option value="open">Open to All</option>
+                            <option value="approval">Admin Approval Required</option>
+                        </select>
+
                         <button type="submit">Create Group</button>
                     </form>
                 </div>
@@ -161,6 +223,18 @@
                     </ul>
                 </div>
             </div>
+
+
+            <!-- pending group join requests -->
+             <div class="container">
+                <h3>Pending request Notifications</h3>
+                <div class="card">
+                    <div class="notification-list" id="notification-list">
+                        
+                    </div>
+                </div>
+             </div>
+
             <!-- groups -->
             <div class="container">
                 <h3>Your Groups</h3>
@@ -173,12 +247,12 @@
                         {% elif group.join_policy == 'open' %}
                             <a href="{% url 'join_group' group.name %}">Join Group</a>
                         {% elif group.join_policy == 'approval' %}
-                            <a href="{% url 'join_group' group.name %}">Request to Join</a>
+                            <a href="{% url 'join_group' group.name %}" data-id="{{group.id}}" class="join-request">Request to Join</a>
                         {% endif %}
             
                         <ul>
                             {% for membership in group.group_memberships.all %}
-                                <li>{{ membership.user.username }} - Role: {{ membership.get_role_display }}</li>
+                                <li data-membership-role = "{{ membership.get_role_display }}" >{{ membership.user.username }} - Role: {{ membership.get_role_display }}</li>
                             {% empty %}
                                 <li>No members in this group.</li>
                             {% endfor %}
@@ -196,14 +270,72 @@
                 <!-- chat content here -->
                 {% endblock %}
             </div>
-            <!-- <div>
-                <input type="text" id="message-input" placeholder="Type your message...">
-                <button onclick="sendMessage()">Send</button>
-            </div> -->
+            
         </div>
     </div>
-
+    
+    
+    
     <script>
+        const notificationList = document.getElementById('notification-list');
+
+        const groupId = this.getAttribute('data-id');
+        const role = this.getAttribute('data-membership-role');
+        const userId = "{{request.user.id}}"; //from django context
+        const userName = "{{request.user.username}}";
+        const joinRequest = document.getElementsByClassName('join-request');
+
+        const chatSocket = new WebSocket(
+            'ws://' + window.location.host + '/ws/notifications/'
+        );
+
+        //listen for messages from websocket
+        chatSocket.onmessage = function (e){
+            const data = JSON.parse(e.data);
+
+            if( data.target_group_id === groupId && data.target_role === role && data.admin_user_ids.includes(userId)){
+                // display notification only for matching admins
+                displayNotification(data.message);
+            }
+        };
+
+        function displayNotification(message){
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('notification');
+            messageElement.innerHTML = message;
+            notificationList.appendChild(messageElement);
+            //autoscroll to the latest notification
+            notificationList.scrollTop = notificationList.scrollHeight;
+        }
+
+        //send message over websocket when a join request is clicked
+        Array.from(joinRequest).forEach(request => {
+            request.onclick = function (e){
+                const groupId = this.getAttribute('data-id');
+                chatSocket.send(JSON.stringify({
+                    'username': userName,
+                    'group_id': groupId,
+                }));
+            };
+        });
+        
+        
+    
+        document.addEventListener('DOMContentLoaded', function () {
+            const groupNameInput = document.querySelector('input[name="group_name"]');
+            const createGroupContainer = document.querySelector('.create-group');
+            const joinPolicyDropdown = document.querySelector('select[name="join_policy"]');
+
+            groupNameInput.addEventListener('input', function () {
+                if (groupNameInput.value.trim() !== "") {
+                    createGroupContainer.classList.add('show-dropdown');
+                    joinPolicyDropdown.style.height = joinPolicyDropdown.scrollHeight + "px";
+                } else {
+                    createGroupContainer.classList.remove('show-dropdown');
+                    joinPolicyDropdown.style.height = "0";
+                }
+            });
+        });
         function searchUser() {
             const query = document.getElementById('user-search').value;
             const resultsDiv = document.getElementById('search-results');

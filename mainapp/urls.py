@@ -19,6 +19,8 @@ urlpatterns = [
 
     #path('group', views.group_chat, name='group'), 
     path('join-group/<str:group_name>/', views.join_group, name='join_group'),
+    
+    path('approve-request/<int:request_id>/<str:action>', views.approve_request, name='approve_request'),
+
     path('manage-requests/<str:group_name>/', views.manage_join_requests, name='manage_join_requests'),
-    path('approve-request/<int:request_id>/', views.approve_request, name='approve_request'),
 ]

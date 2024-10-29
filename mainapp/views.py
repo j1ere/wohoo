@@ -15,6 +15,8 @@ import logging
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from .models import CustomUser  # Make sure to import your CustomUser model
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -60,7 +62,7 @@ def home_view(request, group_name=None):
     user = request.user
 
     # Fetch unread notifications
-    notifications = Notification.objects.filter(user=user, is_read=False)
+    notifications = JoinRequest.objects.filter(status='pending')
 
     # Get all direct messages where the user is either the sender or recipient
     dms_as_sender = Message.objects.filter(sender=user, recipient__isnull=False)
@@ -95,9 +97,11 @@ def home_view(request, group_name=None):
 def create_group_view(request):
     if request.method == 'POST':
         group_name = request.POST.get('group_name')
-        if group_name:
+        join_policy = request.POST.get('join_policy')
+
+        if group_name and join_policy:
             # Create the new group and add the current user as an admin
-            group = Group.objects.create(name=group_name)
+            group = Group.objects.create(name=group_name, join_policy=join_policy)
             #automatically add the creator as an admin and member
             group.admins.add(request.user)
             group.members.add(request.user)
@@ -228,6 +232,7 @@ def submit_form(request):
 
 @login_required
 def join_group(request, group_name):
+    logger.info("================i got called ==================")
     group = get_object_or_404(Group, name=group_name)
 
     #check user if user is already a member
@@ -238,9 +243,53 @@ def join_group(request, group_name):
     if group.join_policy == 'open':
         group.members.add(request.user)
         return redirect('group_chat', group_name=group_name)
-    else: 
-        JoinRequest.objects.get_or_create(user=request.user, group=group)
-        return JsonResponse("A join request has been successfully sent for you")
+    
+    logger.info("=================================then i followed===================================")
+    #otherwise create a join request and notify the admin
+    join_request, created = JoinRequest.objects.get_or_create(user=request.user, group=group, status='pending')
+
+    logger.info('=====================i was saved to the database ============================')
+    
+    #send websocket notification to admins
+    # channel_layer = get_channel_layer()
+    # async_to_sync(channel_layer.group_send)(
+    #     f"notifications_{group_name}",
+    #     {
+    #         "type": "new_join_request",
+    #         "request_id": join_request.id,
+    #         "username": request.user.username,
+    #     }
+    # )
+    logger.info(f"===============FINISHED EXECUTION====================")
+    logger.info(f"===============FINISHED EXECUTION====================")
+    return JsonResponse({"message": "A join request has been successfully sent for you"}, safe=False)
+
+
+from django.views.decorators.csrf import csrf_exempt
+
+@login_required
+@csrf_exempt
+def approve_request(request, request_id, action):
+    try:
+        join_request = get_object_or_404(JoinRequest, id=request_id)
+        group=join_request.group
+
+        if not group.is_admin(request.user):
+            return HttpResponseForbidden("only admins can approve requests")
+
+        if action == 'approve':
+            join_request.status = 'approved'
+            group.members.add(join_request.user)
+        elif action == 'deny':
+            join_request.status = 'denied'
+        join_request.save()
+
+        return JsonResponse({'message': f'Request {action}d successfully.'})
+        
+    except JoinRequest.DoesNotExist:
+        return JsonResponse({"error":"request not found"}, status=404)
+    
+
 
 
 
@@ -253,17 +302,3 @@ def manage_join_requests(request, group_name):
 
     requests = group.join_requests.filter(status='pending')
     return render(request, 'manage_join_requests.html', {'group':group, 'requests':requests})
-
-@login_required
-def approve_request(request, request_id):
-    join_request = get_object_or_404(JoinRequest, id=request_id)
-    group=join_request.group
-
-    if not group.is_admin(request.user):
-        return HttpResponseForbidden("only admins can approve requests")
-
-    join_request.status = 'approved'
-    join_request.save()
-    group.members.add(join_request.user)
-
-    return redirect('manage_join_requests', group_name = group.name)
