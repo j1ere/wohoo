@@ -161,3 +161,13 @@ LOGGING = {
         },
     },
 }
+
+
+
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+MEDIA_URL = '/uploads/'  # This should match your URL path
+MEDIA_ROOT = os.path.join(BASE_DIR, 'uploads')  # Path where files are stored

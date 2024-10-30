@@ -178,6 +178,10 @@ Copy code
 User = get_user_model()  # Get the user model class
 specific_user = await database_sync_to_async(User.objects.get)(id=requesting_user
 """
+import base64
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from datetime import datetime
 class DMConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         # Get the sender (user initiating the connection)
@@ -209,41 +213,58 @@ class DMConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-        message = data['message']
 
-        # Save the message into the database using the message model
-        direct_message = await database_sync_to_async(Message.objects.create)(sender=self.sender, recipient=self.recipient, content=message)
+        """
+        In your receive method, you have message = data['message'], which assumes that a message will always be present when no file is uploaded. It may be safer to use data.get('message') to avoid KeyErrors if a message is not included.
 
-        # Create a notification for the receiver
-        #await database_sync_to_async(Notification.objects.create)(user=self.recipient, message=f"New message from {self.sender.username}: {message}")
-        
-        #logger.info(f"Notification created for {self.recipient.username}")
+        """
+        message = data.get('message')
+        file_data = data.get('file')
 
-        # Send the message to the room group
-        await self.channel_layer.group_send(self.room_group_name, {
-            'type': 'chat_message',
+        if file_data:
+            # Decode the base64 data
+            file_name = file_data['name']
+            file_type = file_data['type']
+            file_content = base64.b64decode(file_data['data'])
+            file_size = len(file_content)
+
+            if file_size > 100 * 1024 * 1024:  # 100 MB in bytes
+                await self.send(text_data=json.dumps({
+                    'error': 'File size exceeds the 100 MB limit.',
+                }))
+                return
+            
+             # Save the file
+            path = default_storage.save(f'uploads/{file_name}', ContentFile(file_content))
+            file_url = default_storage.url(path)
+            file_storage_time = datetime.now().isoformat()
+
+            await database_sync_to_async(Message.objects.create)(sender=self.sender, recipient=self.recipient, content=file_url)
+
+            await self.channel_layer.group_send(self.room_group_name, {
+            'type': 'chat_message_file',
             'message': message,
             'sender': self.sender.username,
-            'timestamp': direct_message.timestamp.isoformat() # Send timestamp as ISO format
+            'timestamp': file_storage_time, # Send timestamp as ISO format
+            'file': {
+                    'name': file_name,
+                    'type': file_type,
+                    'url': file_url,
+                },
             })
+        else:
+            # Save the message into the database using the message model
+            direct_message = await database_sync_to_async(Message.objects.create)(sender=self.sender, recipient=self.recipient, content=message)
 
-        # Check if the recipient is online
-        # recipient = await self.get_recipient(self.recipient)  # Ensure this method is defined in your consumer
-        # if recipient and recipient.is_online():  # Ensure is_online is a method on your CustomUser model
-        #     # If the recipient is online, send the message instantly
-        #     await self.send(text_data=json.dumps({
-        #         'message': message,
-        #         'sender': self.sender.username
-        #     }))
-        # else:
-        #     # If the recipient is offline, send a notification
-        #     await self.channel_layer.group_send(
-        #         f"user_{self.recipient.username}",
-        #         {
-        #             'type': 'send_notification',
-        #             'notification': f"You have a new message from {self.sender.username}"
-        #         }
-        #     )
+            # Send the message to the room group
+            await self.channel_layer.group_send(self.room_group_name, {
+                'type': 'chat_message',
+                'message': message,
+                'sender': self.sender.username,
+                'timestamp': direct_message.timestamp.isoformat() # Send timestamp as ISO format
+                })
+
+        
 
     # Send the message to the WebSocket
     async def chat_message(self, event):
@@ -253,7 +274,13 @@ class DMConsumer(AsyncWebsocketConsumer):
 
         await self.send(text_data=json.dumps({'message': message, 'sender': sender, 'timestamp': timestamp}))
 
+    async def chat_message_file(self, event):
+        message = event['message']
+        sender = event['sender']
+        timestamp = event['timestamp']
+        file = event['file']
 
+        await self.send(text_data=json.dumps({'message': message, 'sender': sender, 'timestamp': timestamp, 'file': file}))
 
     # Ensure you define get_recipient method
     async def get_recipient(self, recipient):

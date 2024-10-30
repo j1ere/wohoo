@@ -56,12 +56,14 @@
     <form id="message-form" class="form">
         <!-- Button to toggle emoji picker visibility -->
         <button type='button' id="emoji-picker-button">😊</button>
-
         <!-- Emoji picker container -->
         <div id="emoji-picker" style="display: none;">
             <!-- Emoji icons -->
             <div id="emoji-list"></div>
         </div>
+        <!-- File input for file uploads -->
+        <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.docx,.txt" />
+
         <input type="text" id="message-input" placeholder="Type a message" autocomplete="off">
         <button type="submit">Send</button>
     </form>
@@ -77,6 +79,7 @@
         const messageInput = document.getElementById('message-input');
         const messageForm = document.getElementById('message-form');
         const messageList = document.getElementById('message-list');
+        
         
         // Render emojis in the emoji picker
         function renderEmojis() {
@@ -109,6 +112,30 @@
             }
         });
 
+        //file sharing
+        const fileInput = document.getElementById('file-input');
+        let selectedFile = null;
+        const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB in bytes
+
+
+        fileInput.addEventListener('change', (event) => {
+            selectedFile = event.target.files[0];
+
+            if (selectedFile) {
+                if (selectedFile.size > MAX_FILE_SIZE) {
+                    alert('File size exceeds 100 MB. Please select a smaller file.');
+                    fileInput.value = ''; // Clear the input
+                    selectedFile = null; // Reset selected file
+                } else {
+                    messageInput.value = `File ready to send: ${selectedFile.name}`;
+                }
+            }
+        });
+
+
+
+
+
         // Ensure 'receiver_username' is correctly passed in the WebSocket URL
         const receiverUsername = "{{ receiver.username }}";  // Use receiver.username from Django context
         const chatSocket = new WebSocket(
@@ -117,28 +144,95 @@
 
 
 
-        // Listen for messages from WebSocket
+        // // Listen for messages from WebSocket
+        // chatSocket.onmessage = function(e) {
+        //     const data = JSON.parse(e.data);
+        //     const messageElement = document.createElement('div');
+        //     messageElement.classList.add('message');
+        //     messageElement.classList.add(data.sender === "{{ user.username }}" ? 'sent' : 'received');
+        //     messageElement.innerHTML = `<strong>${data.sender}:</strong> ${data.message} <div><small>${data.timestamp}</small></div>`;
+        //     messageList.appendChild(messageElement);
+
+        //     // Auto-scroll to the latest message
+        //     messageList.scrollTop = messageList.scrollHeight;
+        // };
+        ///////////////000000000000000000//////////////////////////
         chatSocket.onmessage = function(e) {
             const data = JSON.parse(e.data);
             const messageElement = document.createElement('div');
             messageElement.classList.add('message');
             messageElement.classList.add(data.sender === "{{ user.username }}" ? 'sent' : 'received');
-            messageElement.innerHTML = `<strong>${data.sender}:</strong> ${data.message} <div><small>${data.timestamp}</small></div>`;
-            messageList.appendChild(messageElement);
+            
+            // Display message
+            if (data.message) {
+                messageElement.innerHTML = `<strong>${data.sender}:</strong> ${data.message} <div><small>${data.timestamp}</small></div>`;
+            }
 
+            // Display file link if exists
+            if (data.file) {
+                const fileLink = document.createElement('a');
+                fileLink.href = data.file.url; // The URL of the uploaded file
+                fileLink.textContent = `Download ${data.file.name}`;
+                fileLink.target = '_blank'; // Open in new tab
+
+                 // Create a new div to display file information including sender and timestamp
+                const fileInfo = document.createElement('div');
+                fileInfo.innerHTML = `<strong>${data.sender}:</strong> <span>File shared at: ${data.timestamp}</span>`;
+                
+                // Append file link and file info to the message element
+                messageElement.appendChild(fileLink);
+                messageElement.appendChild(fileInfo);
+            }
+            
+            messageList.appendChild(messageElement);
+            
             // Auto-scroll to the latest message
             messageList.scrollTop = messageList.scrollHeight;
         };
 
+        //////////////000000000000000000//////////////////////////
+
         // Send message over WebSocket
+        // messageForm.onsubmit = function(e) {
+        //     e.preventDefault();
+        //     const message = messageInput.value;
+        //     chatSocket.send(JSON.stringify({
+        //         'message': message
+        //     }));
+        //     messageInput.value = '';
+        // };
+
+
+        ///////////////////////////////
         messageForm.onsubmit = function(e) {
             e.preventDefault();
             const message = messageInput.value;
-            chatSocket.send(JSON.stringify({
-                'message': message
-            }));
-            messageInput.value = '';
+            
+            // Prepare file data for sending
+            if (selectedFile) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const fileData = event.target.result; // Base64 encoded string
+                    chatSocket.send(JSON.stringify({
+                        'message': message,
+                        'file': {
+                            'name': selectedFile.name,
+                            'type': selectedFile.type,
+                            'data': fileData.split(',')[1], // Send only the data part
+                        }
+                    }));
+                    messageInput.value = ''; // Clear the input field
+                    fileInput.value = ''; // Clear the file input
+                    selectedFile = null; // Reset selected file
+                };
+                reader.readAsDataURL(selectedFile); // Read file as data URL
+            } else {
+                // Send message without a file
+                chatSocket.send(JSON.stringify({ 'message': message }));
+                messageInput.value = ''; // Clear the input field
+            }
         };
+        //////////////////////////////
 
         // Handle WebSocket close
         // chatSocket.onclose = function(e) {
