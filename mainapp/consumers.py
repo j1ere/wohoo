@@ -235,7 +235,7 @@ class DMConsumer(AsyncWebsocketConsumer):
                 return
             
              # Save the file
-            path = default_storage.save(f'uploads/{file_name}', ContentFile(file_content))
+            path = default_storage.save(file_name, ContentFile(file_content))
             file_url = default_storage.url(path)
             file_storage_time = datetime.now().isoformat()
 
