@@ -54,16 +54,61 @@
     </div>
 
     <form id="message-form" class="form">
+        <!-- Button to toggle emoji picker visibility -->
+        <button type='button' id="emoji-picker-button">😊</button>
+
+        <!-- Emoji picker container -->
+        <div id="emoji-picker" style="display: none;">
+            <!-- Emoji icons -->
+            <div id="emoji-list"></div>
+        </div>
         <input type="text" id="message-input" placeholder="Type a message" autocomplete="off">
         <button type="submit">Send</button>
     </form>
 
     <script>
+         // Define an array of emojis
+        const emojis = ['😊', '😂', '😍', '😎', '🤔', '😅', '😋', '😘', '🥰', '😇', '🤩', '🤗', '🙌', '👏', '💪', '👍', '👌', '✌️', '🤘', '👋', '🤙', '💋', '💖', '💕', '💯', '🔥', '🌟', '⭐', '💫', '✨'];
+
+        // Get references to DOM elements
+        const emojiPickerButton = document.getElementById('emoji-picker-button');
+        const emojiPicker = document.getElementById('emoji-picker');
+        const emojiList = document.getElementById('emoji-list');
         const messageInput = document.getElementById('message-input');
         const messageForm = document.getElementById('message-form');
         const messageList = document.getElementById('message-list');
         
+        // Render emojis in the emoji picker
+        function renderEmojis() {
+            const emojiItems = emojis.map(emoji => `<button type="button" class="emoji-icon">${emoji}</button>`).join('');
+            emojiList.innerHTML = emojiItems;
+        }
         
+         // Toggle emoji picker visibility
+        emojiPickerButton.addEventListener('click', function(event) {
+            emojiPicker.style.display = emojiPicker.style.display === 'none' ? 'block' : 'none';
+            event.stopPropagation(); // Prevent form submit
+        });
+
+         // Add selected emoji to message input at cursor position
+        emojiList.addEventListener('click', function(event) {
+            if (event.target.classList.contains('emoji-icon')) {
+                event.preventDefault(); // Prevent form submission
+                const emoji = event.target.textContent;
+                const cursorPosition = messageInput.selectionStart;
+                const message = messageInput.value;
+                messageInput.value = message.slice(0, cursorPosition) + emoji + message.slice(cursorPosition);
+                messageInput.focus();
+            }
+        });
+
+        // Hide emoji picker if clicking outside of it
+        document.addEventListener('click', function(event) {
+            if (!emojiPicker.contains(event.target) && event.target !== emojiPickerButton) {
+                emojiPicker.style.display = 'none';
+            }
+        });
+
         // Ensure 'receiver_username' is correctly passed in the WebSocket URL
         const receiverUsername = "{{ receiver.username }}";  // Use receiver.username from Django context
         const chatSocket = new WebSocket(
@@ -106,11 +151,25 @@
             messageElement.innerHTML = `<strong>System:</strong> Connection closed. Please try again later.`;
             messageList.appendChild(messageElement);
         };
-        
+        /**
+         * is used to remove form submission data from the URL history. When a form is submitted, especially if the page reloads, some browsers may add the form data (like query strings) to the URL. If the user then refreshes the page or navigates back, the form may be resubmitted unintentionally.
+
+            Explanation of How It Works
+            window.history.replaceState: This checks if the replaceState method is supported by the browser.
+            replaceState(null, null, window.location.href): This updates the current history entry with the same URL (without reloading the page), effectively clearing any form data that might be attached to the URL.
+            This technique helps:
+
+            Avoid accidental resubmission of form data upon page refresh.
+            Keep the URL clean without any extra parameters after a form submission.
+
+         * */
         if (window.history.replaceState) {
             window.history.replaceState(null, null, window.location.href);
         }
 
+        // Initialize emoji list on page load
+        renderEmojis();
 
     </script>
+        
 {% endblock %}
